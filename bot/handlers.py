@@ -1,3 +1,4 @@
+import asyncio
 from telegram.ext import ApplicationBuilder, CommandHandler
 from config.logger import logger, log_and_raise
 from config.envs import TELEGRAM_TOKEN  # Centralized env var import
@@ -25,6 +26,11 @@ def run_bot():
         app.add_handler(CommandHandler("newbooking", newbooking))  # Booking: Create new booking
 
         logger.info("[Bot] ✅ Handlers registered. Starting polling...")
+
+        # Create and set an event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         app.run_polling()
 
     except Exception as e:
