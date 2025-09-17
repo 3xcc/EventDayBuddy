@@ -26,3 +26,4 @@ if not GOOGLE_CREDS_JSON:
 
 # ===== Optional Settings =====
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
