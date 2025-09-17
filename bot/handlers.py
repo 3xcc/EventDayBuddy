@@ -1,9 +1,9 @@
 import asyncio
 from telegram.ext import ApplicationBuilder, CommandHandler
 from config.logger import logger, log_and_raise
-from config.envs import TELEGRAM_TOKEN  # Centralized env var import
-from bot.admin import cpe               # Admin commands
-from bot.bookings import newbooking     # Booking commands
+from config.envs import TELEGRAM_TOKEN
+from bot.admin import cpe
+from bot.bookings import newbooking
 
 # ===== Command Handlers =====
 async def start(update, context):
@@ -20,10 +20,10 @@ def run_bot():
         logger.info("[Bot] Initializing Telegram bot application...")
         app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-        # Register commands here
+        # Register commands
         app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("cpe", cpe))                # Admin: Create Present Event
-        app.add_handler(CommandHandler("newbooking", newbooking))  # Booking: Create new booking
+        app.add_handler(CommandHandler("cpe", cpe))
+        app.add_handler(CommandHandler("newbooking", newbooking))
 
         logger.info("[Bot] ✅ Handlers registered. Starting polling...")
 
@@ -31,7 +31,8 @@ def run_bot():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        app.run_polling()
+        # Run polling without signal handlers (safe in background thread)
+        app.run_polling(stop_signals=None)
 
     except Exception as e:
         log_and_raise("Bot Init", "starting Telegram bot", e)
