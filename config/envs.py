@@ -24,6 +24,24 @@ GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
 if not GOOGLE_CREDS_JSON:
     log_and_raise("Env", "loading GOOGLE_CREDS_JSON", Exception("GOOGLE_CREDS_JSON is not set"))
 
+# Google Drive folder IDs
+
+DRIVE_MANIFESTS_FOLDER_ID = os.getenv("DRIVE_MANIFESTS_FOLDER_ID")
+if not MANIFESTS_FOLDER_ID:
+    log_and_raise("Env", "loading MANIFESTS_FOLDER_ID", Exception("MANIFESTS_FOLDER_ID is not set"))
+
+DRIVE_IDS_FOLDER_ID = os.getenv("DRIVE_IDS_FOLDER_ID")
+if not DRIVE_IDS_FOLDER_ID :
+    log_and_raise("Env", "loading DRIVE_IDS_FOLDER_ID ", Exception("DRIVE_IDS_FOLDER_ID  is not set"))
+
+
 # ===== Optional Settings =====
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+
+# Feature toggles for ops behavior
+CHECKIN_STRICT = os.getenv("CHECKIN_STRICT", "false").lower() == "true"
+PHOTO_REQUIRED = os.getenv("PHOTO_REQUIRED", "false").lower() == "true"
+
+# Example numeric setting (future use)
+# MAX_SEATS_DEFAULT = int(os.getenv("MAX_SEATS_DEFAULT", "60"))
