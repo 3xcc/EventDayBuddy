@@ -3,7 +3,6 @@ from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 from config.logger import logger, log_and_raise
 from config.envs import GOOGLE_SHEET_ID, GOOGLE_CREDS_JSON  # Centralized env vars
-from drive.manifest import generate_manifest_pdf, upload_to_drive
 
 # ===== Config =====
 SPREADSHEET_ID = GOOGLE_SHEET_ID
@@ -181,6 +180,9 @@ def export_manifest_pdf(boat_number: str, event_name: str = None):
     Returns a summary string (and could be extended to return a URL).
     """
     try:
+        # Local import to avoid circular dependency
+        from drive.manifest import generate_manifest_pdf, upload_to_drive
+
         # Generate PDF bytes
         pdf_bytes = generate_manifest_pdf(boat_number, event_name=event_name)
 

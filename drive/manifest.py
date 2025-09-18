@@ -1,7 +1,6 @@
 import io
 from datetime import datetime
 from config.logger import logger, log_and_raise
-from sheets.manager import get_manifest_rows
 
 # Optional: choose your PDF library
 # from reportlab.lib.pagesizes import A4
@@ -15,6 +14,9 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
     Returns PDF as bytes.
     """
     try:
+        # Local import to avoid circular dependency
+        from sheets.manager import get_manifest_rows
+
         manifest = get_manifest_rows(boat_number, event_name=event_name)
         logger.info(f"[Drive] Generating manifest PDF for Boat {boat_number} with {len(manifest)} passengers.")
 
