@@ -6,6 +6,8 @@ from db.init import get_db
 from db.models import Config, Boat, BoardingSession
 from sheets.manager import create_event_tab
 
+from drive.utils import ensure_drive_subfolder  # Add this at the top
+
 # ===== /cpe Command =====
 async def cpe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Create Present Event — sets active event and creates tab in Sheets."""
@@ -33,6 +35,11 @@ async def cpe(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 config_entry = Config(key="active_event", value=event_name)
                 db.add(config_entry)
             db.commit()
+
+        # Ensure Drive folder exists for this event
+        folder_id = ensure_drive_subfolder("IDs", event_name)
+        context.bot_data["drive_folder_id"] = folder_id
+        logger.info(f"[Drive] Folder ready for event '{event_name}' — ID: {folder_id}")
 
         await update.message.reply_text(f"✅ Active event set to: {event_name}")
         logger.info(f"[Admin] Active event set to '{event_name}'")
