@@ -2,9 +2,23 @@
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.oauth2.service_account import Credentials
 from config.logger import logger, log_and_raise
 from config.envs import GOOGLE_CREDS_JSON
 import json
+
+
+def get_drive_service():
+    """
+    Returns an authenticated Google Drive service using service account credentials.
+    """
+    creds_dict = json.loads(GOOGLE_CREDS_JSON)
+    creds = Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/drive"]
+    )
+    service = build("drive", "v3", credentials=creds)
+    return service
 
 def ensure_drive_subfolder(folder_type: str, event_name: str) -> str:
     """
@@ -12,9 +26,8 @@ def ensure_drive_subfolder(folder_type: str, event_name: str) -> str:
     Returns the folder ID.
     """
     try:
-        creds = json.loads(GOOGLE_CREDS_JSON)
-        service = build("drive", "v3", credentials=creds)
-
+        service = get_drive_service()
+        
         # Step 1: Find root "EventDayBuddy" folder
         results = service.files().list(
             q="name='EventDayBuddy' and mimeType='application/vnd.google-apps.folder' and trashed=false",
