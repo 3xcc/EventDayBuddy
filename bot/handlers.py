@@ -3,7 +3,7 @@ from io import BytesIO
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from config.logger import logger, log_and_raise
-from config.envs import TELEGRAM_TOKEN
+from config.envs import TELEGRAM_TOKEN, PUBLIC_URL  # PUBLIC_URL = your Render HTTPS URL
 
 # Core commands
 from bot.admin import cpe, boatready, checkinmode, editseats
@@ -11,6 +11,9 @@ from bot.bookings import newbooking
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
 from bot.departure import departed
 from drive.manifest import generate_manifest_pdf
+
+# Global application instance so FastAPI route can access it
+application = None
 
 # ===== Command Handlers =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -57,9 +60,10 @@ async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         log_and_raise("Callback", "handling exportpdf", e)
 
-# ===== Bot Runner =====
-def run_bot():
-    """Initialize and run the Telegram bot."""
+# ===== Bot Initializer for Webhook Mode =====
+def init_bot():
+    """Initialize the Telegram bot application and set webhook."""
+    global application
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
         app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -79,17 +83,14 @@ def run_bot():
         register_checkin_handlers(app)
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
 
-        logger.info("[Bot] ✅ All handlers registered. Starting polling...")
+        # Set webhook
+        webhook_url = f"{PUBLIC_URL}/{TELEGRAM_TOKEN}"
+        logger.info(f"[Bot] Setting webhook to {webhook_url}")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(app.bot.set_webhook(webhook_url))
 
-        # Ensure an event loop exists in this thread
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        # Disable signal handling since we're not in the main thread
-        app.run_polling(stop_signals=None)
+        application = app
+        logger.info("[Bot] ✅ Webhook set and bot initialized.")
 
     except Exception as e:
-        log_and_raise("Bot Init", "starting Telegram bot", e)
+        log_and_raise("Bot Init", "initializing Telegram bot", e)
