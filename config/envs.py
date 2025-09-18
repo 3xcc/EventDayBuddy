@@ -28,11 +28,11 @@ if not GOOGLE_CREDS_JSON:
 
 DRIVE_MANIFESTS_FOLDER_ID = os.getenv("DRIVE_MANIFESTS_FOLDER_ID")
 if not DRIVE_MANIFESTS_FOLDER_ID:
-    log_and_raise("Env", "loading DRIVE_MANIFESTS_FOLDER_ID, Exception("DRIVE_MANIFESTS_FOLDER_ID is not set"))
+    log_and_raise("Env", "loading DRIVE_MANIFESTS_FOLDER_ID", Exception("DRIVE_MANIFESTS_FOLDER_ID is not set"))
 
 DRIVE_IDS_FOLDER_ID = os.getenv("DRIVE_IDS_FOLDER_ID")
-if not DRIVE_IDS_FOLDER_ID :
-    log_and_raise("Env", "loading DRIVE_IDS_FOLDER_ID ", Exception("DRIVE_IDS_FOLDER_ID  is not set"))
+if not DRIVE_IDS_FOLDER_ID:
+    log_and_raise("Env", "loading DRIVE_IDS_FOLDER_ID", Exception("DRIVE_IDS_FOLDER_ID is not set"))
 
 
 # ===== Optional Settings =====
