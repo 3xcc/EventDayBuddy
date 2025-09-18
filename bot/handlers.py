@@ -88,8 +88,8 @@ def run_bot():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-        # Now safe to run polling
-        app.run_polling()
+        # Disable signal handling since we're not in the main thread
+        app.run_polling(stop_signals=None)
 
     except Exception as e:
         log_and_raise("Bot Init", "starting Telegram bot", e)
