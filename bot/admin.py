@@ -25,7 +25,14 @@ async def cpe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         event_name = " ".join(context.args).strip()
         logger.info(f"[Admin] Creating new event: {event_name}")
 
-        create_event_tab(event_name)
+        # Gracefully skip sheet creation if tab already exists
+        try:
+            create_event_tab(event_name)
+        except HttpError as sheet_error:
+            if "already exists" in str(sheet_error):
+                logger.warning(f"[Sheets] Sheet '{event_name}' already exists — skipping creation.")
+            else:
+                raise sheet_error
 
         with get_db() as db:
             config_entry = db.query(Config).filter(Config.key == "active_event").first()
