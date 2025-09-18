@@ -86,9 +86,11 @@ async def init_bot():
         # Build webhook URL safely
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
-
-        # Await webhook registration directly
         await app.bot.set_webhook(webhook_url)
+
+        # ✅ Start the bot so update_queue is active
+        await app.initialize()
+        await app.start()
 
         application = app
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
