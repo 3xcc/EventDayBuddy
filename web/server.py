@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from config.logger import logger
 from config.envs import LOG_LEVEL, TELEGRAM_TOKEN
-from bot.handlers import application, init_bot
+from bot.handlers import init_bot
 from telegram import Update
 
 # Render sets PORT automatically; default to 8000 for local dev
@@ -39,6 +39,8 @@ def health_check():
 async def telegram_webhook(request: Request):
     """Endpoint for Telegram to POST updates to."""
     try:
+        from bot.handlers import application 
+
         if application is None:
             logger.error("[Webhook] Bot application not initialized — update dropped.")
             return {"ok": False}

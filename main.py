@@ -2,11 +2,10 @@ import uvicorn
 from config.logger import logger, log_and_raise
 from config.envs import DRY_RUN, LOG_LEVEL
 from db.init import init_db
-from bot.handlers import init_bot  # <-- new import for webhook mode
-from web.server import app, PORT
+from web.server import app, PORT  # ✅ no longer importing init_bot here
 
 def main():
-    """Main entrypoint for EventDayBuddy — starts DB, bot (webhook), and web server."""
+    """Main entrypoint for EventDayBuddy — starts DB and web server."""
     try:
         logger.info("🚀 EventDayBuddy starting up...")
 
@@ -15,10 +14,7 @@ def main():
         logger.info("✅ Database initialized successfully.")
 
         if DRY_RUN:
-            logger.warning("[Main] DRY_RUN mode enabled — bot external writes are limited; starting web server only.")
-        else:
-            # Initialize bot and set webhook
-            init_bot()
+            logger.warning("[Main] DRY_RUN mode enabled — bot external writes are limited.")
 
         # Start FastAPI server (also serves Telegram webhook endpoint)
         uvicorn.run(
