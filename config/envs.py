@@ -45,3 +45,8 @@ PHOTO_REQUIRED = os.getenv("PHOTO_REQUIRED", "false").lower() == "true"
 
 # Example numeric setting (future use)
 # MAX_SEATS_DEFAULT = int(os.getenv("MAX_SEATS_DEFAULT", "60"))
+
+# Public URL for webhook
+PUBLIC_URL = os.getenv("PUBLIC_URL")
+if not PUBLIC_URL:
+    log_and_raise("Env", "loading PUBLIC_URL", Exception("PUBLIC_URL is not set"))

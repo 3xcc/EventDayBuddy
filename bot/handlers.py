@@ -83,11 +83,12 @@ def init_bot():
         register_checkin_handlers(app)
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
 
-        # Set webhook
-        webhook_url = f"{PUBLIC_URL}/{TELEGRAM_TOKEN}"
+        # Build webhook URL safely
+        webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(app.bot.set_webhook(webhook_url))
+
+        # Set webhook (safe for environments with running event loops)
+        asyncio.run(app.bot.set_webhook(webhook_url))
 
         application = app
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
