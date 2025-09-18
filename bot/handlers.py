@@ -61,7 +61,7 @@ async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         log_and_raise("Callback", "handling exportpdf", e)
 
 # ===== Bot Initializer for Webhook Mode =====
-def init_bot():
+async def init_bot():
     """Initialize the Telegram bot application and set webhook."""
     global application
     try:
@@ -87,8 +87,8 @@ def init_bot():
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
 
-        # Set webhook (safe for environments with running event loops)
-        asyncio.run(app.bot.set_webhook(webhook_url))
+        # Await webhook registration directly
+        await app.bot.set_webhook(webhook_url)
 
         application = app
         logger.info("[Bot] ✅ Webhook set and bot initialized.")

@@ -24,7 +24,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     logger.info("[Web] FastAPI startup — initializing bot...")
-    init_bot()
+    await init_bot()  # ✅ Await the async bot initializer
 
 # ===== Routes =====
 @app.get("/", tags=["Health"])
@@ -37,9 +37,7 @@ def health_check():
 # ===== Telegram Webhook =====
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
-    """
-    Endpoint for Telegram to POST updates to.
-    """
+    """Endpoint for Telegram to POST updates to."""
     try:
         if application is None:
             logger.error("[Webhook] Bot application not initialized — update dropped.")
