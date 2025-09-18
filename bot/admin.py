@@ -5,6 +5,7 @@ from config.envs import ADMIN_CHAT_ID
 from db.init import get_db
 from db.models import Config, Boat, BoardingSession
 from sheets.manager import create_event_tab
+from googleapiclient.errors import HttpError
 
 from drive.utils import ensure_drive_subfolder  # Add this at the top
 
