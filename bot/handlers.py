@@ -81,17 +81,15 @@ def run_bot():
 
         logger.info("[Bot] ✅ All handlers registered. Starting polling...")
 
-        # If running in a background thread, create a new loop
+        # Ensure an event loop exists in this thread
         try:
             loop = asyncio.get_running_loop()
-            if loop.is_running():
-                logger.info("[Bot] Running in existing event loop.")
-                app.run_polling(stop_signals=None)
-            else:
-                app.run_polling()
         except RuntimeError:
-            # No running loop — safe to start normally
-            app.run_polling()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Now safe to run polling
+        app.run_polling()
 
     except Exception as e:
         log_and_raise("Bot Init", "starting Telegram bot", e)
