@@ -37,11 +37,22 @@ try:
 except Exception as e:
     log_and_raise("Sheets Init", "initializing Google Sheets API client", e)
 
-# ===== Core Functions =====
+from googleapiclient.errors import HttpError
+
 def create_event_tab(event_name: str):
     """Create a new event tab with correct headers (no Event column)."""
     try:
         logger.info(f"[Sheets] Creating event tab: {event_name}")
+
+        # ✅ Pre-check: list existing sheets
+        metadata = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+        existing_sheets = [s["properties"]["title"] for s in metadata.get("sheets", [])]
+
+        if event_name in existing_sheets:
+            logger.warning(f"[Sheets] Sheet '{event_name}' already exists — skipping creation.")
+            return
+
+        # Create the new sheet
         requests = [{
             "addSheet": {
                 "properties": {
@@ -67,8 +78,12 @@ def create_event_tab(event_name: str):
         ).execute()
 
         logger.info(f"[Sheets] Event tab '{event_name}' created successfully.")
+
+    except HttpError as e:
+        log_and_raise("Sheets", f"creating event tab {event_name}", e)
     except Exception as e:
         log_and_raise("Sheets", f"creating event tab {event_name}", e)
+
 
 def append_to_master(event_name: str, booking_row: list):
     """Append a booking to the Master tab (with Event column)."""
