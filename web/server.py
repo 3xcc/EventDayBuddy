@@ -24,7 +24,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     logger.info("[Web] FastAPI startup — initializing bot...")
-    await init_bot()  # ✅ Await the async bot initializer
+    try:
+        await init_bot()
+    except Exception as e:
+        logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
 
 # ===== Routes =====
 @app.get("/", tags=["Health"])
