@@ -6,7 +6,7 @@ from config.logger import logger, log_and_raise
 from config.envs import TELEGRAM_TOKEN, PUBLIC_URL  # PUBLIC_URL = your Render HTTPS URL
 
 # Core commands
-from bot.admin import cpe, boatready, checkinmode, editseats, register, unregister, unregister_callback
+from bot.admin import cpe, boatready, checkinmode, editseats, register, unregister
 from bot.bookings import newbooking
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
 from bot.departure import departed
