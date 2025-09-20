@@ -27,4 +27,4 @@ def create_booking(db, event_name, name, id_number, phone, male_dep, resort_dep,
         paid_amount=paid_amount,
         transfer_ref=transfer_ref,
         ticket_type=ticket_type,
-       
+    )
