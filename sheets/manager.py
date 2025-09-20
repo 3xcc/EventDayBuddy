@@ -13,7 +13,7 @@ ROW_FETCH_LIMIT = 1000  # Max rows to fetch in updates/lookups
 MASTER_HEADERS = [
     "No", "Event", "T. Reference", "Name", "ID", "Number",
     "Male' Dep", "Resort Dep", "Paid Amount", "Transfer slip Ref",
-    "Ticket Type", "Check in Time", "Boat", "Status", "ID Doc URL",
+    "Ticket Type", "Check in Time", "Status", "ID Doc URL",
     # Extended fields for scheduled vs actual tracking
     "ArrivalTime", "DepartureTime", "ArrivalBoatBoarded", "DepartureBoatBoarded"
 ]
@@ -22,7 +22,7 @@ MASTER_HEADERS = [
 EVENT_HEADERS = [
     "No", "T. Reference", "Name", "ID", "Number",
     "Male' Dep", "Resort Dep", "Paid Amount", "Transfer slip Ref",
-    "Ticket Type", "Check in Time", "Boat", "Status", "ID Doc URL",
+    "Ticket Type", "Check in Time", "Status", "ID Doc URL",
     "ArrivalTime", "DepartureTime", "ArrivalBoatBoarded", "DepartureBoatBoarded"
 ]
 
@@ -187,8 +187,9 @@ def get_manifest_rows(boat_number: str, event_name: str = None):
         manifest = []
         for row in rows:
             if len(row) >= len(headers):
-                boat_match = (row[12] == boat_number) or (row[16] == boat_number) or (row[17] == boat_number)
-                status_match = row[13] == "checked-in"
+                # Boat match now only checks actual boarded columns
+                boat_match = (row[14] == boat_number) or (row[15] == boat_number)
+                status_match = row[12] == "checked-in"
                 event_match = True if not event_name else row[1] == event_name
                 if boat_match and status_match and event_match:
                     manifest.append(dict(zip(headers, row)))

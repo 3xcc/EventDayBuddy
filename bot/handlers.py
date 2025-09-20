@@ -127,13 +127,11 @@ async def init_bot():
         app.add_handler(CommandHandler("p", checkin_by_phone))
         app.add_handler(CommandHandler("departed", departed))
         app.add_handler(CommandHandler("register", register))
-        app.add_handler(CommandHandler("unregister", unregister))
         
 
         # Register callbacks
         register_checkin_handlers(app)
-        app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
-        app.add_handler(CallbackQueryHandler(unregister_callback, pattern=r"^unreg:.+"))
+        app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))  
 
         # Build webhook URL safely
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"

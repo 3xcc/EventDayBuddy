@@ -156,7 +156,7 @@ async def editseats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id != ADMIN_CHAT_ID:
             await update.message.reply_text("⛔ You are not authorized to run this command.")
             return
-            
+
         if not context.args:
             await update.message.reply_text(
                 "Usage: /editseats <BoatNumber> <NewCapacity>\n"
@@ -192,108 +192,87 @@ async def editseats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_and_raise("Admin", "running /editseats", e)
 
 # ===== /Register Command =====
-
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Admin-only command to register a user with a role.
-    Usage: /register <role>
+    Usage: /register <telegramid> <role>
+    Roles: admin, checkin_staff, booking_staff
     """
     try:
-        user_id = str(update.effective_user.id)
-        user_name = update.effective_user.full_name
+        caller_id = str(update.effective_user.id)
 
-        if user_id != ADMIN_CHAT_ID:
-            await update.message.reply_text("⛔ Only admins can register users.")
+        # Only the admin account can run this
+        if caller_id != ADMIN_CHAT_ID:
+            await update.message.reply_text("⛔ Only the admin can register users.")
             return
 
-        if not context.args or context.args[0] not in VALID_ROLES:
+        if len(context.args) != 2:
             await update.message.reply_text(
-                "Usage: /register <role>\n"
-                "Roles: admin, checkin_staff, booking_staff\n"
-                "Example: /register checkin_staff"
+                "Usage: /register <telegramid> <role>\n"
+                f"Roles: {', '.join(VALID_ROLES)}\n"
+                "Example: /register 123456789 checkin_staff"
             )
             return
 
-        role = context.args[0]
+        target_chat_id = context.args[0].strip()
+        role = context.args[1].strip()
+
+        if role not in VALID_ROLES:
+            await update.message.reply_text(
+                f"❌ Invalid role. Valid roles: {', '.join(VALID_ROLES)}"
+            )
+            return
 
         with get_db() as db:
-            existing = db.query(User).filter(User.chat_id == user_id).first()
+            existing = db.query(User).filter(User.chat_id == target_chat_id).first()
             if existing:
                 existing.role = role
-                existing.name = user_name
-                logger.info(f"[Register] Updated role for {user_id} to {role}")
+                logger.info(f"[Register] Updated role for {target_chat_id} to {role}")
             else:
-                new_user = User(chat_id=user_id, name=user_name, role=role)
+                new_user = User(chat_id=target_chat_id, role=role)
                 db.add(new_user)
-                logger.info(f"[Register] Registered new user {user_id} as {role}")
+                logger.info(f"[Register] Registered new user {target_chat_id} as {role}")
             db.commit()
 
         await update.message.reply_text(
-            f"✅ Registered you as {role}.\n"
-            f"You now have access to relevant commands."
+            f"✅ User {target_chat_id} registered as {role}."
         )
 
     except Exception as e:
         log_and_raise("Admin", "registering user", e)
-
+        
 # ===== /UnRegister Command =====
-
 async def unregister(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Admin-only command to view and remove registered users.
+    Admin-only command to remove a registered user.
+    Usage: /unregister <telegramid>
     """
     try:
-        user_id = str(update.effective_user.id)
-        if user_id != ADMIN_CHAT_ID:
-            await update.message.reply_text("⛔ Only admins can use this command.")
+        caller_id = str(update.effective_user.id)
+
+        # Only the admin account can run this
+        if caller_id != ADMIN_CHAT_ID:
+            await update.message.reply_text("⛔ Only the admin can unregister users.")
             return
+
+        if not context.args or len(context.args) != 1:
+            await update.message.reply_text(
+                "Usage: /unregister <telegramid>\n"
+                "Example: /unregister 123456789"
+            )
+            return
+
+        target_chat_id = context.args[0].strip()
 
         with get_db() as db:
-            users = db.query(User).all()
-
-        if not users:
-            await update.message.reply_text("No users are currently registered.")
-            return
-
-        text_lines = ["Registered Users:"]
-        buttons = []
-        for u in users:
-            label = f"{u.name or u.chat_id} — {u.role}"
-            text_lines.append(f"• {label}")
-            buttons.append([InlineKeyboardButton(f"❌ {label}", callback_data=f"unreg:{u.chat_id}")])
-
-        await update.message.reply_text(
-            "\n".join(text_lines) + "\n\nTap to remove:",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-    except Exception as e:
-        log_and_raise("Admin", "listing users for unregister", e)
-
-
-async def unregister_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Handles inline button tap to remove a user.
-    """
-    try:
-        query = update.callback_query
-        await query.answer()
-
-        if not query.data.startswith("unreg:"):
-            await query.edit_message_text("⚠️ Invalid unregister request.")
-            return
-
-        chat_id = query.data.split(":")[1]
-
-        with get_db() as db:
-            user = db.query(User).filter(User.chat_id == chat_id).first()
+            user = db.query(User).filter(User.chat_id == target_chat_id).first()
             if user:
                 db.delete(user)
                 db.commit()
-                await query.edit_message_text(f"✅ Unregistered {user.name or chat_id}.")
-                logger.info(f"[Unregister] Removed user {chat_id}")
+                await update.message.reply_text(f"✅ Unregistered {user.name or target_chat_id}.")
+                logger.info(f"[Unregister] Removed user {target_chat_id}")
             else:
-                await query.edit_message_text("⚠️ User not found.")
+                await update.message.reply_text("⚠️ User not found.")
 
     except Exception as e:
         log_and_raise("Admin", "unregistering user", e)

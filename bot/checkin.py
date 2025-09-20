@@ -82,6 +82,7 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
     except Exception as e:
         log_and_raise("Checkin", f"handling /{method}", e)
 
+
 # ===== Confirm boarding callback =====
 async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -131,6 +132,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         log_and_raise("Checkin", "confirming boarding", e)
+
 
 # ===== Handler registration =====
 def register_checkin_handlers(app):

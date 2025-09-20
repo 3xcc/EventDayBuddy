@@ -38,16 +38,14 @@ class Booking(Base, TimestampMixin):
     arrival_boat_rel = relationship("Boat", foreign_keys=[arrival_boat_boarded])
     departure_boat_rel = relationship("Boat", foreign_keys=[departure_boat_boarded])
 
-    # Legacy / generic fields
+    # Generic fields
     checkin_time = Column(DateTime(timezone=True), nullable=True)
-    boat = Column(Integer, ForeignKey("boats.boat_number"), nullable=True, index=True)  # optional legacy
     status = Column(String, default="booked", index=True)  # booked / boarded / missed / transferred
     id_doc_url = Column(String, nullable=True)
 
     group_id = Column(Integer, ForeignKey("booking_groups.id"), nullable=True)
     group = relationship("BookingGroup", back_populates="bookings")
 
-    boat_rel = relationship("Boat", back_populates="bookings")
     checkins = relationship("CheckinLog", back_populates="booking")
 
     def __repr__(self):
@@ -97,7 +95,6 @@ class Boat(Base, TimestampMixin):
     capacity = Column(Integer, nullable=False)
     status = Column(String, default="open", index=True)
 
-    bookings = relationship("Booking", back_populates="boat_rel")
     sessions = relationship("BoardingSession", back_populates="boat_rel")
 
     def __repr__(self):
@@ -177,4 +174,4 @@ class WaitlistEntry(Base, TimestampMixin):
     notes = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<WaitlistEntry booking_id={self.booking_id} reassigned_boat={self.reassigned_boat}>"
+        return f"<WaitlistEntry booking_id={self.booking_id} reassigned_boat={self.reassigned_boat}>"   
