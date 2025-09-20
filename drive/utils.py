@@ -96,4 +96,4 @@ def upload_file_to_drive(folder_id: str, file_stream, filename: str, mimetype: s
         return file.get("webViewLink")
 
     except HttpError as e:
-        log_and_raise("Drive", f"uploading file '{filename}' to folder {folder_id}", 
+        log_and_raise("Drive", f"uploading file '{filename}' to folder {folder_id}", e)
