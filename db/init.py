@@ -12,7 +12,12 @@ try:
         pool_pre_ping=True,
         echo=(LOG_LEVEL == "DEBUG")  # Show SQL in debug mode
     )
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    SessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=engine,
+        expire_on_commit=False   # ✅ keep attributes after commit
+    )
     logger.info("[DB] ✅ Connected to database.")
 except Exception as e:
     log_and_raise("DB Init", "connecting to database", e)

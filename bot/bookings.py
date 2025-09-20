@@ -5,6 +5,8 @@ from config.envs import DRY_RUN
 from db.init import get_db
 from db.models import Booking, Config
 from sheets.manager import append_to_master, append_to_event
+from utils.money import parse_amount   # ✅ import the sanitizer
+
 
 def parse_booking_input(update_text: str):
     """
@@ -41,7 +43,6 @@ def parse_booking_input(update_text: str):
     return name, id_number, phone, male_dep, resort_dep, paid_amount, transfer_ref, ticket_type, arrival_time, departure_time
 
 
-
 # ===== /newbooking Command =====
 async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -59,14 +60,14 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             phone = context.args[2]
             male_dep = context.args[3]
             resort_dep = context.args[4]
-            paid_amount = context.args[5] if len(context.args) > 5 else None
+            paid_amount_raw = context.args[5] if len(context.args) > 5 else None
             transfer_ref = context.args[6] if len(context.args) > 6 else None
             ticket_type = context.args[7] if len(context.args) > 7 else None
             arrival_time = context.args[8] if len(context.args) > 8 else None
             departure_time = context.args[9] if len(context.args) > 9 else None
         else:
             # Fallback: parse multi-line input
-            name, id_number, phone, male_dep, resort_dep, paid_amount, transfer_ref, ticket_type, arrival_time, departure_time = parse_booking_input(update.message.text)
+            name, id_number, phone, male_dep, resort_dep, paid_amount_raw, transfer_ref, ticket_type, arrival_time, departure_time = parse_booking_input(update.message.text)
             if not name or not id_number or not phone:
                 await update.message.reply_text(
                     "❌ Could not parse booking. Please use one of the supported formats:\n"
@@ -75,6 +76,14 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Or the classic single-line args."
                 )
                 return
+
+        # ✅ Sanitize paid_amount
+        paid_amount = parse_amount(paid_amount_raw)
+        if paid_amount_raw and paid_amount is None:
+            await update.message.reply_text(
+                "❌ Invalid amount. Use numbers like 400 or 1,200.50 (currency symbols allowed)."
+            )
+            return
 
         with get_db() as db:
             # Get active event
@@ -111,7 +120,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 phone=phone,
                 male_dep=male_dep,
                 resort_dep=resort_dep,
-                paid_amount=paid_amount,
+                paid_amount=paid_amount,   # ✅ sanitized Decimal
                 transfer_ref=transfer_ref,
                 ticket_type=ticket_type,
                 arrival_time=arrival_time,
@@ -132,7 +141,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 phone,
                 arrival_time or "",
                 departure_time or "",
-                paid_amount or "",
+                str(paid_amount) if paid_amount is not None else "",  # ✅ safe string
                 transfer_ref or "",
                 ticket_type or ""
             ]
@@ -156,7 +165,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg_lines.append(f"Arrival Time: {arrival_time}")
         if departure_time:
             msg_lines.append(f"Departure Time: {departure_time}")
-        if paid_amount:
+        if paid_amount is not None:
             msg_lines.append(f"Paid: {paid_amount}")
         if ticket_type:
             msg_lines.append(f"Type: {ticket_type}")
