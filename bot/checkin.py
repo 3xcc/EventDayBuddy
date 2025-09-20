@@ -6,6 +6,8 @@ from db.init import get_db
 from db.models import Booking, BoardingSession, CheckinLog, User, Config
 from sqlalchemy import or_
 from datetime import datetime
+from sheets.manager import update_booking_in_sheets  # ✅ new import
+
 
 # ===== Lookup and prompt =====
 async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,13 +102,12 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("❌ Booking not found.")
                 return
 
-            # Get active boat session
             session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
             if not session:
                 await query.edit_message_text("⚠️ No active boat session.")
                 return
 
-            # Update booking based on leg
+            # Update booking
             if leg == "arrival":
                 booking.arrival_boat_boarded = session.boat_number
             elif leg == "departure":
@@ -124,6 +125,13 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             db.add(checkin_log)
             db.commit()
+            db.refresh(booking)
+
+        # ✅ Push update to Sheets
+        try:
+            update_booking_in_sheets(booking.event_name, booking)
+        except Exception as e:
+            logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
         await query.edit_message_text(
             f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."

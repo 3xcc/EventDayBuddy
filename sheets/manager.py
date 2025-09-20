@@ -120,16 +120,30 @@ def append_to_event(event_name: str, booking_row: list):
         log_and_raise("Sheets", f"appending booking to event tab {event_name}", e)
 
 
-def update_booking_in_sheets(event_name: str, reference: str, updates: dict):
+def update_booking_in_sheets(event_name: str, booking):
     """
-    Placeholder for updating a booking row in both Master and event tab.
+    Update a booking row in both Master and event tab using the booking's ticket_ref.
     """
     try:
-        logger.info(f"[Sheets] Updating booking {reference} in Master and {event_name} with {updates}")
+        # Build updates dict from Booking object
+        updates = {
+            "ArrivalBoatBoarded": str(booking.arrival_boat_boarded or ""),
+            "DepartureBoatBoarded": str(booking.departure_boat_boarded or ""),
+            "Check in Time": booking.checkin_time.isoformat() if booking.checkin_time else "",
+            "Status": booking.status or "",
+            "ID Doc URL": booking.id_doc_url or ""
+        }
+
+        # Use the stored ticket_ref as the row key
+        ticket_ref = booking.ticket_ref
+
+        update_booking_row(event_name, ticket_ref, updates)
+        logger.info(f"[Sheets] Booking {ticket_ref} updated in Master and {event_name}")
+
     except Exception as e:
-        log_and_raise("Sheets", f"updating booking {reference}", e)
+        log_and_raise("Sheets", f"updating booking {getattr(booking, 'ticket_ref', booking.id)}", e)
 
-
+        
 def update_booking_row(event_name: str, booking_id: str, updates: dict):
     """
     Update a booking row in both Master and event tab using T. Reference (booking_id).

@@ -15,22 +15,30 @@ class TimestampMixin:
 class Booking(Base, TimestampMixin):
     __tablename__ = "bookings"
 
-    id = Column(Integer, primary_key=True, index=True)  # T. Reference
+    # Internal primary key
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Business identifiers
     event_name = Column(String, nullable=False, index=True)
+    ticket_ref = Column(String, nullable=False, unique=True, index=True)  # ✅ Ticket reference used in Sheets
     name = Column(String, nullable=False)
     id_number = Column(String, nullable=False, index=True)
     phone = Column(String, nullable=True, index=True)
+
+    # Travel info
     male_dep = Column(String, nullable=True)
     resort_dep = Column(String, nullable=True)
+
+    # Payment info
     paid_amount = Column(Numeric, nullable=True)
     transfer_ref = Column(String, nullable=True)
     ticket_type = Column(String, nullable=True)
 
-    # ✅ Scheduled ticket times (set at booking)
+    # Scheduled ticket times (set at booking)
     arrival_time = Column(String, nullable=True)     # e.g. "15:00"
     departure_time = Column(String, nullable=True)   # e.g. "01:00"
 
-    # ✅ Actual boats boarded (set at check-in)
+    # Actual boats boarded (set at check-in)
     arrival_boat_boarded = Column(Integer, ForeignKey("boats.boat_number"), nullable=True)
     departure_boat_boarded = Column(Integer, ForeignKey("boats.boat_number"), nullable=True)
 
@@ -40,17 +48,19 @@ class Booking(Base, TimestampMixin):
 
     # Generic fields
     checkin_time = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String, default="booked", index=True)  # booked / boarded / missed / transferred
+    status = Column(String, default="booked", index=True)  # booked / checked-in / boarded / missed / transferred
     id_doc_url = Column(String, nullable=True)
 
+    # Grouping
     group_id = Column(Integer, ForeignKey("booking_groups.id"), nullable=True)
     group = relationship("BookingGroup", back_populates="bookings")
 
+    # Logs
     checkins = relationship("CheckinLog", back_populates="booking")
 
     def __repr__(self):
         return (
-            f"<Booking id={self.id} name={self.name} event={self.event_name} "
+            f"<Booking ticket_ref={self.ticket_ref} name={self.name} event={self.event_name} "
             f"arrival_time={self.arrival_time} departure_time={self.departure_time} "
             f"arrival_boat={self.arrival_boat_boarded} departure_boat={self.departure_boat_boarded} "
             f"status={self.status}>"

@@ -75,7 +75,8 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Reply with summary + export button
         buttons = [
-            [InlineKeyboardButton("📄 Export ID Cards (PDF)", callback_data=f"exportpdf:{boat_number}")]
+            [InlineKeyboardButton("📄 Export Manifest (PDF)", callback_data=f"exportpdf:{boat_number}")],
+            [InlineKeyboardButton("🪪 Export ID Cards (PDF)", callback_data=f"exportidcards:{boat_number}")]
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
 

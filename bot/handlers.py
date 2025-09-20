@@ -13,6 +13,8 @@ from bot.departure import departed
 from drive.manifest import generate_manifest_pdf
 from db.init import get_db
 from db.models import User
+from drive.idcards import generate_idcards_pdf
+
 
 
 # Global application instance so FastAPI route can access it
@@ -108,6 +110,29 @@ async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         log_and_raise("Callback", "handling exportpdf", e)
 
+# ===== Export Id Cards Callback =====
+
+async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Generate and send ID cards PDF."""
+    try:
+        query = update.callback_query
+        await query.answer()
+        boat_number = query.data.split(":")[1]
+
+        pdf_bytes = generate_idcards_pdf(boat_number)
+        if not pdf_bytes:
+            await query.edit_message_text(f"❌ Failed to generate ID cards for Boat {boat_number}.")
+            return
+
+        pdf_stream = BytesIO(pdf_bytes)
+        pdf_stream.name = f"Boat_{boat_number}_IDCards.pdf"
+        await query.message.reply_document(
+            document=pdf_stream,
+            caption=f"🪪 ID Cards PDF for Boat {boat_number}"
+        )
+    except Exception as e:
+        log_and_raise("Callback", "handling exportidcards", e)
+
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
     """Initialize the Telegram bot application and set webhook."""
@@ -127,7 +152,9 @@ async def init_bot():
         app.add_handler(CommandHandler("p", checkin_by_phone))
         app.add_handler(CommandHandler("departed", departed))
         app.add_handler(CommandHandler("register", register))
-        
+        app.add_handler(CommandHandler("unregister", unregister))  # ✅ add this
+        app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
+
 
         # Register callbacks
         register_checkin_handlers(app)
@@ -147,3 +174,5 @@ async def init_bot():
 
     except Exception as e:
         log_and_raise("Bot Init", "initializing Telegram bot", e)
+
+
