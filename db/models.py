@@ -73,7 +73,6 @@ class BookingGroup(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     phone = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     bookings = relationship("Booking", back_populates="group")
 
@@ -184,4 +183,4 @@ class WaitlistEntry(Base, TimestampMixin):
     notes = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<WaitlistEntry booking_id={self.booking_id} reassigned_boat={self.reassigned_boat}>"   
+        return f"<WaitlistEntry booking_id={self.booking_id} reassigned_boat={self.reassigned_boat}>"

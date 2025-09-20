@@ -1,8 +1,21 @@
 from db.models import Booking
 from config.logger import logger
 
-def create_booking(db, event_name, name, id_number, phone, male_dep, resort_dep,
-                   paid_amount, transfer_ref, ticket_type, arrival_time, departure_time, id_doc_url):
+def create_booking(
+    db,
+    event_name,
+    name,
+    id_number,
+    phone,
+    male_dep,
+    resort_dep,
+    paid_amount,
+    transfer_ref,
+    ticket_type,
+    arrival_time,
+    departure_time,
+    id_doc_url=None,
+):
     # Deduplication
     existing = db.query(Booking).filter(
         Booking.event_name == event_name,
@@ -27,4 +40,18 @@ def create_booking(db, event_name, name, id_number, phone, male_dep, resort_dep,
         paid_amount=paid_amount,
         transfer_ref=transfer_ref,
         ticket_type=ticket_type,
+        arrival_time=arrival_time,
+        departure_time=departure_time,
+        id_doc_url=id_doc_url,
     )
+
+    try:
+        db.add(booking)
+        db.commit()
+        db.refresh(booking)
+        logger.info(f"[Booking] Created booking {booking.id} ({ticket_ref}) for {name}")
+        return booking, ticket_ref
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[Booking] Failed to create booking: {e}", exc_info=True)
+        raise

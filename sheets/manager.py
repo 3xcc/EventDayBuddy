@@ -14,7 +14,6 @@ MASTER_HEADERS = [
     "No", "Event", "T. Reference", "Name", "ID", "Number",
     "Male' Dep", "Resort Dep", "Paid Amount", "Transfer slip Ref",
     "Ticket Type", "Check in Time", "Status", "ID Doc URL",
-    # Extended fields for scheduled vs actual tracking
     "ArrivalTime", "DepartureTime", "ArrivalBoatBoarded", "DepartureBoatBoarded"
 ]
 
@@ -47,16 +46,12 @@ def create_event_tab(event_name: str):
     """Create a new event tab with correct headers (no Event column)."""
     try:
         logger.info(f"[Sheets] Creating event tab: {event_name}")
-
-        # ✅ Pre-check: list existing sheets
         metadata = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         existing_sheets = [s["properties"]["title"] for s in metadata.get("sheets", [])]
-
         if event_name in existing_sheets:
             logger.warning(f"[Sheets] Sheet '{event_name}' already exists — skipping creation.")
             return
 
-        # Create the new sheet
         requests = [{
             "addSheet": {
                 "properties": {
@@ -73,7 +68,6 @@ def create_event_tab(event_name: str):
             body={"requests": requests}
         ).execute()
 
-        # Write headers
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{event_name}!A1",
@@ -82,7 +76,6 @@ def create_event_tab(event_name: str):
         ).execute()
 
         logger.info(f"[Sheets] Event tab '{event_name}' created successfully.")
-
     except HttpError as e:
         log_and_raise("Sheets", f"creating event tab {event_name}", e)
     except Exception as e:
@@ -121,11 +114,8 @@ def append_to_event(event_name: str, booking_row: list):
 
 
 def update_booking_in_sheets(event_name: str, booking):
-    """
-    Update a booking row in both Master and event tab using the booking's ticket_ref.
-    """
+    """Update a booking row in both Master and event tab using the booking's ticket_ref."""
     try:
-        # Build updates dict from Booking object
         updates = {
             "ArrivalBoatBoarded": str(booking.arrival_boat_boarded or ""),
             "DepartureBoatBoarded": str(booking.departure_boat_boarded or ""),
@@ -133,22 +123,15 @@ def update_booking_in_sheets(event_name: str, booking):
             "Status": booking.status or "",
             "ID Doc URL": booking.id_doc_url or ""
         }
-
-        # Use the stored ticket_ref as the row key
         ticket_ref = booking.ticket_ref
-
         update_booking_row(event_name, ticket_ref, updates)
         logger.info(f"[Sheets] Booking {ticket_ref} updated in Master and {event_name}")
-
     except Exception as e:
         log_and_raise("Sheets", f"updating booking {getattr(booking, 'ticket_ref', booking.id)}", e)
 
-        
+
 def update_booking_row(event_name: str, booking_id: str, updates: dict):
-    """
-    Update a booking row in both Master and event tab using T. Reference (booking_id).
-    `updates` is a dict mapping column header to new value.
-    """
+    """Update a booking row in both Master and event tab using T. Reference (booking_id)."""
     try:
         sheet = service.spreadsheets()
         tabs = [MASTER_TAB, event_name]
@@ -183,6 +166,15 @@ def update_booking_row(event_name: str, booking_id: str, updates: dict):
     except Exception as e:
         log_and_raise("Sheets", f"updating booking {booking_id}", e)
 
+
+def update_booking_photo(event_name: str, ticket_ref: str, photo_url: str):
+    """Convenience helper: update only the ID Doc URL for a booking in both Master and event tab."""
+    try:
+        updates = {"ID Doc URL": photo_url}
+        update_booking_row(event_name, ticket_ref, updates)
+        logger.info(f"[Sheets] Photo URL updated for {ticket_ref} in Master and {event_name}")
+    except Exception as e:
+        log_and_raise("Sheets", f"updating photo for {ticket_ref}", e)
 
 def get_manifest_rows(boat_number: str, event_name: str = None):
     """
@@ -225,9 +217,15 @@ def export_manifest_pdf(boat_number: str, event_name: str = None):
 
         # Generate PDF bytes
         pdf_bytes = generate_manifest_pdf(boat_number, event_name=event_name)
+        if not pdf_bytes:
+            raise Exception("No PDF bytes generated")
 
-        logger.info(f"[Sheets] Manifest PDF generated for Boat {boat_number} ({len(pdf_bytes)} bytes)")
-        return f"Manifest PDF for Boat {boat_number} generated ({len(pdf_bytes)} bytes)."
+        # Optionally upload to Drive
+        filename = f"Boat_{boat_number}_Manifest.pdf"
+        url = upload_to_drive(pdf_bytes, filename, event_name or "General")
+
+        logger.info(f"[Sheets] Manifest PDF generated and uploaded for Boat {boat_number}: {url}")
+        return url
 
     except Exception as e:
         log_and_raise("Sheets", f"exporting manifest PDF for boat {boat_number}", e)

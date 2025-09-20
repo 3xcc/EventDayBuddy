@@ -1,19 +1,30 @@
 import asyncio
 from io import BytesIO
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 from config.logger import logger, log_and_raise
 from config.envs import TELEGRAM_TOKEN, PUBLIC_URL  # PUBLIC_URL = your Render HTTPS URL
 
 # Core commands
 from bot.admin import cpe, boatready, checkinmode, editseats, register, unregister
-from bot.bookings import newbooking
+from bot.bookings import (
+    newbooking,
+    attach_photo_callback,
+    handle_booking_photo,
+)
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
 from bot.departure import departed
 from drive.manifest import generate_manifest_pdf
+from drive.idcards import generate_idcards_pdf
 from db.init import get_db
 from db.models import User
-from drive.idcards import generate_idcards_pdf
 
 
 
@@ -152,13 +163,16 @@ async def init_bot():
         app.add_handler(CommandHandler("p", checkin_by_phone))
         app.add_handler(CommandHandler("departed", departed))
         app.add_handler(CommandHandler("register", register))
-        app.add_handler(CommandHandler("unregister", unregister))  # ✅ add this
-        app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
-
+        app.add_handler(CommandHandler("unregister", unregister))
 
         # Register callbacks
         register_checkin_handlers(app)
-        app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))  
+        app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
+        app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
+
+        # 📷 Attach Photo flow
+        app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
+        app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
         # Build webhook URL safely
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
