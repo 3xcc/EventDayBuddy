@@ -85,13 +85,13 @@ def create_event_tab(event_name: str):
 def append_to_master(event_name: str, booking_row: list):
     """Append a booking to the Master tab (with Event column)."""
     try:
-        row_with_event = [None, event_name] + booking_row
+        # booking_row already includes Event as the 2nd column
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{MASTER_TAB}!A:A",
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
-            body={"values": [row_with_event]}
+            body={"values": [booking_row]}
         ).execute()
         logger.info(f"[Sheets] Booking appended to Master for event '{event_name}'.")
     except Exception as e:
@@ -101,17 +101,18 @@ def append_to_master(event_name: str, booking_row: list):
 def append_to_event(event_name: str, booking_row: list):
     """Append a booking to the active event tab (no Event column)."""
     try:
+        # Strip out the Event column (index 1) for event tab
+        row_for_event = [booking_row[0]] + booking_row[2:]
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{event_name}!A:A",
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
-            body={"values": [[None] + booking_row]}
+            body={"values": [row_for_event]}
         ).execute()
         logger.info(f"[Sheets] Booking appended to event tab '{event_name}'.")
     except Exception as e:
         log_and_raise("Sheets", f"appending booking to event tab {event_name}", e)
-
 
 def update_booking_in_sheets(event_name: str, booking):
     """Update a booking row in both Master and event tab using the booking's ticket_ref."""
@@ -119,7 +120,7 @@ def update_booking_in_sheets(event_name: str, booking):
         updates = {
             "ArrivalBoatBoarded": str(booking.arrival_boat_boarded or ""),
             "DepartureBoatBoarded": str(booking.departure_boat_boarded or ""),
-            "Check in Time": booking.checkin_time.isoformat() if booking.checkin_time else "",
+            "CheckinTime": booking.checkin_time.isoformat() if booking.checkin_time else "",
             "Status": booking.status or "",
             "ID Doc URL": booking.id_doc_url or ""
         }
@@ -131,7 +132,10 @@ def update_booking_in_sheets(event_name: str, booking):
 
 
 def update_booking_row(event_name: str, booking_id: str, updates: dict):
-    """Update a booking row in both Master and event tab using T. Reference (booking_id)."""
+    """
+    Update a booking row in both Master and event tab using TicketRef (booking_id).
+    `updates` is a dict mapping column header to new value.
+    """
     try:
         sheet = service.spreadsheets()
         tabs = [MASTER_TAB, event_name]
@@ -145,9 +149,11 @@ def update_booking_row(event_name: str, booking_id: str, updates: dict):
             rows = result.get("values", [])
 
             for i, row in enumerate(rows, start=2):
+                # TicketRef is always column index 2
                 if len(row) > 2 and str(row[2]).strip().lower() == booking_id_lower:
                     headers = MASTER_HEADERS if tab == MASTER_TAB else EVENT_HEADERS
                     updated_row = row.copy()
+
                     for key, value in updates.items():
                         if key in headers:
                             col_index = headers.index(key)
@@ -161,7 +167,7 @@ def update_booking_row(event_name: str, booking_id: str, updates: dict):
                         valueInputOption="RAW",
                         body={"values": [updated_row]}
                     ).execute()
-                    logger.info(f"[Sheets] Booking {booking_id} updated in {tab}")
+                    logger.info(f"[Sheets] Booking {booking_id} updated in {tab} (row {i})")
                     break
     except Exception as e:
         log_and_raise("Sheets", f"updating booking {booking_id}", e)
