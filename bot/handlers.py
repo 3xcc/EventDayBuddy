@@ -12,6 +12,7 @@ from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handle
 from bot.departure import departed
 from drive.manifest import generate_manifest_pdf
 from db.init import get_db
+from db.models import User
 
 
 # Global application instance so FastAPI route can access it
