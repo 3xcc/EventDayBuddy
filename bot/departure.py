@@ -18,7 +18,11 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if not context.args:
-            await update.message.reply_text("Usage: /departed <boat_number>")
+            await update.message.reply_text(
+                "Usage: /departed <BoatNumber>\n"
+                "Marks the boat as departed and generates a manifest.\n"
+                "Only admins can use this command."
+            )
             return
 
         boat_number = int(context.args[0])

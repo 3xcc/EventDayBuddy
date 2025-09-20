@@ -1,5 +1,5 @@
 # drive/utils.py
-
+from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.oauth2.service_account import Credentials
@@ -75,3 +75,25 @@ def ensure_drive_subfolder(folder_type: str, event_name: str) -> str:
 
     except HttpError as e:
         log_and_raise("Drive", f"ensuring subfolder for {event_name} in {folder_type}", e)
+
+def upload_file_to_drive(folder_id: str, file_stream, filename: str, mimetype: str) -> str:
+    """
+    Upload a file to the specified Drive folder and return its webViewLink.
+    """
+    try:
+        service = get_drive_service()
+        file_metadata = {
+            "name": filename,
+            "parents": [folder_id]
+        }
+        media = MediaIoBaseUpload(file_stream, mimetype=mimetype)
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, webViewLink"
+        ).execute()
+        logger.info(f"[Drive] Uploaded file '{filename}' to folder {folder_id}")
+        return file.get("webViewLink")
+
+    except HttpError as e:
+        log_and_raise("Drive", f"uploading file '{filename}' to folder {folder_id}", 

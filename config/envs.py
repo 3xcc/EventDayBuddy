@@ -50,3 +50,7 @@ PHOTO_REQUIRED = os.getenv("PHOTO_REQUIRED", "false").lower() == "true"
 PUBLIC_URL = os.getenv("PUBLIC_URL")
 if not PUBLIC_URL:
     log_and_raise("Env", "loading PUBLIC_URL", Exception("PUBLIC_URL is not set"))
+
+# Boarding flow toggles
+WAITLIST_AUTO_ASSIGN = os.getenv("WAITLIST_AUTO_ASSIGN", "false").lower() == "true"
+GROUP_CHECKIN_PROMPT = os.getenv("GROUP_CHECKIN_PROMPT", "false").lower() == "true"

@@ -14,25 +14,55 @@ class Booking(Base, TimestampMixin):
     __tablename__ = "bookings"
 
     id = Column(Integer, primary_key=True, index=True)  # T. Reference
-    event_name = Column(String, nullable=False, index=True)  # For Master sheet Event column
+    event_name = Column(String, nullable=False, index=True)
     name = Column(String, nullable=False)
-    id_number = Column(String, nullable=False, index=True)   # ID
-    phone = Column(String, nullable=True, index=True)        # Number
-    male_dep = Column(String, nullable=True)                 # Male' Dep
-    resort_dep = Column(String, nullable=True)               # Resort Dep
-    paid_amount = Column(Numeric, nullable=True)             # Paid Amount
-    transfer_ref = Column(String, nullable=True)             # Transfer slip Ref
-    ticket_type = Column(String, nullable=True)              # Ticket Type
-    checkin_time = Column(DateTime(timezone=True), nullable=True)  # Check in Time
-    boat = Column(Integer, ForeignKey("boats.boat_number"), nullable=True, index=True)  # Boat assignment
-    status = Column(String, default="booked", index=True)    # booked / checked-in / cancelled / waitlisted
-    id_doc_url = Column(String, nullable=True)               # Google Drive link
+    id_number = Column(String, nullable=False, index=True)
+    phone = Column(String, nullable=True, index=True)
+    male_dep = Column(String, nullable=True)
+    resort_dep = Column(String, nullable=True)
+    paid_amount = Column(Numeric, nullable=True)
+    transfer_ref = Column(String, nullable=True)
+    ticket_type = Column(String, nullable=True)
+    checkin_time = Column(DateTime(timezone=True), nullable=True)
+    boat = Column(Integer, ForeignKey("boats.boat_number"), nullable=True, index=True)
+    status = Column(String, default="booked", index=True)  # booked / boarded / missed / transferred
+    id_doc_url = Column(String, nullable=True)
+
+    group_id = Column(Integer, ForeignKey("booking_groups.id"), nullable=True)
+    group = relationship("BookingGroup", back_populates="bookings")
 
     boat_rel = relationship("Boat", back_populates="bookings")
     checkins = relationship("CheckinLog", back_populates="booking")
 
     def __repr__(self):
         return f"<Booking id={self.id} name={self.name} event={self.event_name} status={self.status}>"
+
+# ===== Booking Group =====
+class BookingGroup(Base, TimestampMixin):
+    __tablename__ = "booking_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    bookings = relationship("Booking", back_populates="group")
+
+    def __repr__(self):
+        return f"<BookingGroup id={self.id} phone={self.phone}>"
+
+# ===== Ticket Transfer Log =====
+class TicketTransferLog(Base, TimestampMixin):
+    __tablename__ = "ticket_transfer_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    from_booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False)
+    to_booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False)
+    transferred_by = Column(String, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    reason = Column(String, nullable=True)
+
+    def __repr__(self):
+        return f"<TicketTransferLog from={self.from_booking_id} to={self.to_booking_id}>"
 
 # ===== Boat Inventory =====
 class Boat(Base, TimestampMixin):
@@ -41,7 +71,7 @@ class Boat(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     boat_number = Column(Integer, nullable=False, unique=True, index=True)
     capacity = Column(Integer, nullable=False)
-    status = Column(String, default="open", index=True)  # open / departed
+    status = Column(String, default="open", index=True)
 
     bookings = relationship("Booking", back_populates="boat_rel")
     sessions = relationship("BoardingSession", back_populates="boat_rel")
@@ -79,6 +109,7 @@ class BoardingSession(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     boat_number = Column(Integer, ForeignKey("boats.boat_number"), nullable=False, index=True)
+    event_name = Column(String, nullable=True)
     started_by = Column(String, ForeignKey("users.chat_id"), nullable=False)
     is_active = Column(Boolean, default=True, index=True)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -88,7 +119,7 @@ class BoardingSession(Base, TimestampMixin):
     user_rel = relationship("User", back_populates="sessions_started")
 
     def __repr__(self):
-        return f"<BoardingSession boat={self.boat_number} active={self.is_active}>"
+        return f"<BoardingSession boat={self.boat_number} event={self.event_name} active={self.is_active}>"
 
 # ===== Check-in Log =====
 class CheckinLog(Base, TimestampMixin):
@@ -98,7 +129,7 @@ class CheckinLog(Base, TimestampMixin):
     booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False)
     boat_number = Column(Integer, ForeignKey("boats.boat_number"), nullable=False)
     confirmed_by = Column(String, ForeignKey("users.chat_id"), nullable=False)
-    method = Column(String, nullable=False)  # id / phone / manual
+    method = Column(String, nullable=False)
     confirmed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     booking = relationship("Booking", back_populates="checkins")

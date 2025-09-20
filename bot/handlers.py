@@ -17,12 +17,57 @@ application = None
 
 # ===== Command Handlers =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Basic /start command."""
+    
+    """
+    Dynamic /start command — shows role-based help menu.
+    """
     try:
-        await update.message.reply_text("👋 EventDayBuddy is online and ready.")
-        logger.info(f"[Bot] /start used by {update.effective_user.id}")
+        user_id = str(update.effective_user.id)
+
+        with get_db() as db:
+            user = db.query(User).filter(User.chat_id == user_id).first()
+            role = user.role if user else "viewer"
+
+        logger.info(f"[Bot] /start used by {user_id} ({role})")
+
+        if role == "admin":
+            help_text = (
+                "👋 Welcome, Admin!\n\n"
+                "Here are your available commands:\n"
+                "• /cpe — Set active event\n"
+                "• /boatready — Start boarding session\n"
+                "• /checkinmode — Enable check-in mode\n"
+                "• /editseats — Adjust boat capacity\n"
+                "• /departed — Mark boat departed\n"
+                "• /newbooking — Add a booking\n"
+                "• /i — Check-in by ID\n"
+                "• /p — Check-in by phone\n"
+                "• /transfer — Transfer ticket\n"
+                "• /newbookings — Bulk import\n"
+                "• /start — Show this help menu"
+            )
+        elif role in ["checkin_staff", "booking_staff"]:
+            help_text = (
+                "👋 Welcome, Event Staff!\n\n"
+                "Here are your available commands:\n"
+                "• /newbooking — Add a booking\n"
+                "• /i — Check-in by ID\n"
+                "• /p — Check-in by phone\n"
+                "• /start — Show this help menu"
+            )
+        else:
+            help_text = (
+                "👋 Welcome to EventDayBuddy!\n\n"
+                "This bot helps manage event check-ins and boat boarding.\n"
+                "If you're an event staff member, ask your admin to register you.\n"
+                "Use /start anytime to see your available commands."
+            )
+
+        await update.message.reply_text(help_text)
+
     except Exception as e:
         log_and_raise("Bot", "handling /start command", e)
+
 
 # ===== Export PDF Callback =====
 async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,10 +123,14 @@ async def init_bot():
         app.add_handler(CommandHandler("i", checkin_by_id))
         app.add_handler(CommandHandler("p", checkin_by_phone))
         app.add_handler(CommandHandler("departed", departed))
+        app.add_handler(CommandHandler("register", register))
+        app.add_handler(CommandHandler("unregister", unregister))
+        
 
         # Register callbacks
         register_checkin_handlers(app)
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
+        app.add_handler(CallbackQueryHandler(unregister_callback, pattern=r"^unreg:.+"))
 
         # Build webhook URL safely
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"

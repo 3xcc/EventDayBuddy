@@ -9,10 +9,26 @@ from datetime import datetime
 
 # ===== Lookup and prompt =====
 async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /i <IDNumber>\n"
+            "Checks in a passenger by ID.\n"
+            "Only staff can use this command."
+        )
+        return
     await handle_checkin(update, context, method="id")
 
+
 async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /p <PhoneNumber>\n"
+            "Checks in passengers by phone number.\n"
+            "Only staff can use this command."
+        )
+        return
     await handle_checkin(update, context, method="phone")
+
 
 async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, method: str):
     try:
