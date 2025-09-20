@@ -5,6 +5,7 @@ from config.logger import logger, log_and_raise
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+
 def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
     """
     Generate a manifest PDF for a given boat (and optional event filter).
@@ -27,9 +28,27 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
 
         y = 760
         for idx, row in enumerate(manifest, start=1):
-            line = f"{idx}. {row.get('Name', '')} | {row.get('ID', '')} | {row.get('Number', '')}"
-            c.drawString(50, y, line)
-            y -= 18
+            # Expecting row dict to include scheduled + actual fields
+            name = row.get("Name", "")
+            id_number = row.get("ID", "")
+            phone = row.get("Number", "")
+
+            sched_arr = row.get("ArrivalTime", "-")
+            sched_dep = row.get("DepartureTime", "-")
+            actual_arr_boat = row.get("ArrivalBoatBoarded", "-")
+            actual_dep_boat = row.get("DepartureBoatBoarded", "-")
+
+            line1 = f"{idx}. {name} | {id_number} | {phone}"
+            line2 = f"   Scheduled: Arr {sched_arr} / Dep {sched_dep}"
+            line3 = f"   Actual: ArrBoat {actual_arr_boat} / DepBoat {actual_dep_boat}"
+
+            c.drawString(50, y, line1)
+            y -= 16
+            c.drawString(70, y, line2)
+            y -= 16
+            c.drawString(70, y, line3)
+            y -= 22
+
             if y < 50:
                 c.showPage()
                 c.setFont("Helvetica", 12)

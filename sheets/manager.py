@@ -13,14 +13,17 @@ ROW_FETCH_LIMIT = 1000  # Max rows to fetch in updates/lookups
 MASTER_HEADERS = [
     "No", "Event", "T. Reference", "Name", "ID", "Number",
     "Male' Dep", "Resort Dep", "Paid Amount", "Transfer slip Ref",
-    "Ticket Type", "Check in Time", "Boat", "Status", "ID Doc URL"
+    "Ticket Type", "Check in Time", "Boat", "Status", "ID Doc URL",
+    # Extended fields for scheduled vs actual tracking
+    "ArrivalTime", "DepartureTime", "ArrivalBoatBoarded", "DepartureBoatBoarded"
 ]
 
 # Headers for Event tabs (no Event column)
 EVENT_HEADERS = [
     "No", "T. Reference", "Name", "ID", "Number",
     "Male' Dep", "Resort Dep", "Paid Amount", "Transfer slip Ref",
-    "Ticket Type", "Check in Time", "Boat", "Status", "ID Doc URL"
+    "Ticket Type", "Check in Time", "Boat", "Status", "ID Doc URL",
+    "ArrivalTime", "DepartureTime", "ArrivalBoatBoarded", "DepartureBoatBoarded"
 ]
 
 # ===== Init Google Sheets API =====
@@ -38,6 +41,7 @@ except Exception as e:
     log_and_raise("Sheets Init", "initializing Google Sheets API client", e)
 
 from googleapiclient.errors import HttpError
+
 
 def create_event_tab(event_name: str):
     """Create a new event tab with correct headers (no Event column)."""
@@ -100,6 +104,7 @@ def append_to_master(event_name: str, booking_row: list):
     except Exception as e:
         log_and_raise("Sheets", "appending booking to Master", e)
 
+
 def append_to_event(event_name: str, booking_row: list):
     """Append a booking to the active event tab (no Event column)."""
     try:
@@ -114,6 +119,7 @@ def append_to_event(event_name: str, booking_row: list):
     except Exception as e:
         log_and_raise("Sheets", f"appending booking to event tab {event_name}", e)
 
+
 def update_booking_in_sheets(event_name: str, reference: str, updates: dict):
     """
     Placeholder for updating a booking row in both Master and event tab.
@@ -122,6 +128,7 @@ def update_booking_in_sheets(event_name: str, reference: str, updates: dict):
         logger.info(f"[Sheets] Updating booking {reference} in Master and {event_name} with {updates}")
     except Exception as e:
         log_and_raise("Sheets", f"updating booking {reference}", e)
+
 
 def update_booking_row(event_name: str, booking_id: str, updates: dict):
     """
@@ -136,7 +143,7 @@ def update_booking_row(event_name: str, booking_id: str, updates: dict):
         for tab in tabs:
             result = sheet.values().get(
                 spreadsheetId=SPREADSHEET_ID,
-                range=f"{tab}!A2:O{ROW_FETCH_LIMIT}"
+                range=f"{tab}!A2:Z{ROW_FETCH_LIMIT}"
             ).execute()
             rows = result.get("values", [])
 
@@ -162,23 +169,25 @@ def update_booking_row(event_name: str, booking_id: str, updates: dict):
     except Exception as e:
         log_and_raise("Sheets", f"updating booking {booking_id}", e)
 
+
 def get_manifest_rows(boat_number: str, event_name: str = None):
     """
     Return all checked-in bookings for a given boat from Master tab.
     Optionally filter by event_name.
+    Includes scheduled vs actual fields.
     """
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{MASTER_TAB}!A2:O{ROW_FETCH_LIMIT}"
+            range=f"{MASTER_TAB}!A2:Z{ROW_FETCH_LIMIT}"
         ).execute()
         rows = result.get("values", [])
         headers = MASTER_HEADERS
 
         manifest = []
         for row in rows:
-            if len(row) >= 14:
-                boat_match = row[12] == boat_number
+            if len(row) >= len(headers):
+                boat_match = (row[12] == boat_number) or (row[16] == boat_number) or (row[17] == boat_number)
                 status_match = row[13] == "checked-in"
                 event_match = True if not event_name else row[1] == event_name
                 if boat_match and status_match and event_match:
@@ -188,6 +197,7 @@ def get_manifest_rows(boat_number: str, event_name: str = None):
         return manifest
     except Exception as e:
         log_and_raise("Sheets", f"getting manifest for boat {boat_number}", e)
+
 
 def export_manifest_pdf(boat_number: str, event_name: str = None):
     """
@@ -200,11 +210,6 @@ def export_manifest_pdf(boat_number: str, event_name: str = None):
 
         # Generate PDF bytes
         pdf_bytes = generate_manifest_pdf(boat_number, event_name=event_name)
-
-        # Optional: Upload to Drive and get URL
-        # filename = f"Boat_{boat_number}_Manifest_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.pdf"
-        # file_url = upload_to_drive(pdf_bytes, filename)
-        # return f"Manifest PDF for Boat {boat_number} generated. URL: {file_url}"
 
         logger.info(f"[Sheets] Manifest PDF generated for Boat {boat_number} ({len(pdf_bytes)} bytes)")
         return f"Manifest PDF for Boat {boat_number} generated ({len(pdf_bytes)} bytes)."

@@ -66,23 +66,18 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
                 await update.message.reply_text(f"❌ No booking found for {method}: {query}")
                 return
 
-            # Show photo + confirm button
+            # Show photo + confirm buttons for ARRIVAL vs DEPARTURE
             buttons = [
-                [InlineKeyboardButton("✅ Confirm Boarding", callback_data=f"confirm:{booking.id}")]
+                [InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")],
+                [InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")]
             ]
             reply_markup = InlineKeyboardMarkup(buttons)
 
+            caption = f"👤 {booking.name}\nID: {booking.id_number}\nPhone: {booking.phone}"
             if booking.id_doc_url:
-                await update.message.reply_photo(
-                    photo=booking.id_doc_url,
-                    caption=f"👤 {booking.name}\nID: {booking.id_number}\nPhone: {booking.phone}",
-                    reply_markup=reply_markup
-                )
+                await update.message.reply_photo(photo=booking.id_doc_url, caption=caption, reply_markup=reply_markup)
             else:
-                await update.message.reply_text(
-                    f"👤 {booking.name}\nID: {booking.id_number}\nPhone: {booking.phone}\n(No photo available)",
-                    reply_markup=reply_markup
-                )
+                await update.message.reply_text(caption + "\n(No photo available)", reply_markup=reply_markup)
 
     except Exception as e:
         log_and_raise("Checkin", f"handling /{method}", e)
@@ -93,7 +88,9 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
 
-        booking_id = int(query.data.split(":")[1])
+        parts = query.data.split(":")
+        leg = parts[1]       # "arrival" or "departure"
+        booking_id = int(parts[2])
         user_id = str(query.from_user.id)
 
         with get_db() as db:
@@ -108,27 +105,33 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("⚠️ No active boat session.")
                 return
 
-            # Update booking status
+            # Update booking based on leg
+            if leg == "arrival":
+                booking.arrival_boat_boarded = session.boat_number
+            elif leg == "departure":
+                booking.departure_boat_boarded = session.boat_number
+
             booking.status = "checked-in"
             booking.checkin_time = datetime.utcnow()
-            booking.boat = session.boat_number
 
             # Log check-in
             checkin_log = CheckinLog(
                 booking_id=booking.id,
                 boat_number=session.boat_number,
                 confirmed_by=user_id,
-                method="manual"
+                method=f"{leg}-manual"
             )
             db.add(checkin_log)
             db.commit()
 
-        await query.edit_message_text(f"✅ {booking.name} checked in for Boat {booking.boat}.")
-        logger.info(f"[Checkin] Booking {booking.id} checked in for Boat {booking.boat} by {user_id}")
+        await query.edit_message_text(
+            f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
+        )
+        logger.info(f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} by {user_id}")
 
     except Exception as e:
         log_and_raise("Checkin", "confirming boarding", e)
 
 # ===== Handler registration =====
 def register_checkin_handlers(app):
-    app.add_handler(CallbackQueryHandler(confirm_boarding, pattern=r"^confirm:\d+$"))
+    app.add_handler(CallbackQueryHandler(confirm_boarding, pattern=r"^confirm:(arrival|departure):\d+$"))
