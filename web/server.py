@@ -42,17 +42,26 @@ def health_check():
 async def telegram_webhook(request: Request):
     """Endpoint for Telegram to POST updates to."""
     try:
-        from bot.handlers import application 
+        from bot.handlers import application
 
         if application is None:
             logger.error("[Webhook] Bot application not initialized — update dropped.")
-            return {"ok": False}
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"ok": False, "error": "Bot not initialized"},
+            )
 
         data = await request.json()
+        logger.info(f"[Webhook] Incoming update from {request.client.host}")
+
         update = Update.de_json(data, application.bot)
         await application.update_queue.put(update)
-        return {"ok": True}
+
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"ok": True})
 
     except Exception as e:
         logger.exception("[Webhook] Failed to process update")
-        return {"ok": False}
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"ok": False, "error": str(e)},
+        )

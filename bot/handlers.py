@@ -10,36 +10,23 @@ from telegram.ext import (
     filters,
 )
 from config.logger import logger, log_and_raise
-from config.envs import TELEGRAM_TOKEN, PUBLIC_URL  # PUBLIC_URL = your Render HTTPS URL
-
-# Core commands
+from config.envs import TELEGRAM_TOKEN, PUBLIC_URL
 from bot.admin import cpe, boatready, checkinmode, editseats, register, unregister
-from bot.bookings import (
-    newbooking,
-    attach_photo_callback,
-    handle_booking_photo,
-)
+from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
 from bot.departure import departed
-from drive.manifest import generate_manifest_pdf
-from drive.idcards import generate_idcards_pdf
+from utils.supabase_storage import fetch_signed_file
 from db.init import get_db
-from db.models import User
-
-
+from db.models import User, Config
 
 # Global application instance so FastAPI route can access it
 application = None
 
 # ===== Command Handlers =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    
-    """
-    Dynamic /start command — shows role-based help menu.
-    """
+    """Dynamic /start command — shows role-based help menu."""
     try:
         user_id = str(update.effective_user.id)
-
         with get_db() as db:
             user = db.query(User).filter(User.chat_id == user_id).first()
             role = user.role if user else "viewer"
@@ -84,65 +71,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Bot", "handling /start command", e)
 
-
 # ===== Export PDF Callback =====
 async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle export button after /departed — generate and send manifest PDF."""
+    """Fetch and send the pre-uploaded manifest PDF from Supabase."""
     try:
         query = update.callback_query
         await query.answer()
-
-        if not query.data or ":" not in query.data:
-            await query.edit_message_text("⚠️ Invalid export request.")
-            logger.warning("[Callback] Received malformed exportpdf callback data.")
-            return
-
         boat_number = query.data.split(":")[1]
 
-        # Generate PDF bytes
-        pdf_bytes = generate_manifest_pdf(boat_number)
+        with get_db() as db:
+            active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
+            event_name = active_event_cfg.value if active_event_cfg else "General"
 
-        if not pdf_bytes:
-            await query.edit_message_text(f"❌ Failed to generate manifest PDF for Boat {boat_number}.")
-            logger.error(f"[Callback] No PDF bytes generated for Boat {boat_number}")
-            return
+        path = f"manifests/{event_name}/boat_{boat_number}.pdf"
+        pdf_bytes = fetch_signed_file(path)
 
-        # Send PDF as Telegram document
         pdf_stream = BytesIO(pdf_bytes)
         pdf_stream.name = f"Boat_{boat_number}_Manifest.pdf"
 
         await query.message.reply_document(
             document=pdf_stream,
-            caption=f"📄 Manifest PDF for Boat {boat_number}"
+            caption=f"📄 Manifest PDF for Boat {boat_number} ({event_name})"
         )
-
-        logger.info(f"[Callback] Manifest PDF sent for Boat {boat_number}")
-
     except Exception as e:
-        log_and_raise("Callback", "handling exportpdf", e)
+        await update.callback_query.message.reply_text("❌ Failed to fetch manifest PDF.")
+        log_and_raise("Callback", f"handling exportpdf for boat {boat_number}", e)
 
-# ===== Export Id Cards Callback =====
-
+# ===== Export ID Cards Callback =====
 async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Generate and send ID cards PDF."""
+    """Fetch and send the pre-uploaded ID cards PDF from Supabase."""
     try:
         query = update.callback_query
         await query.answer()
         boat_number = query.data.split(":")[1]
 
-        pdf_bytes = generate_idcards_pdf(boat_number)
-        if not pdf_bytes:
-            await query.edit_message_text(f"❌ Failed to generate ID cards for Boat {boat_number}.")
-            return
+        with get_db() as db:
+            active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
+            event_name = active_event_cfg.value if active_event_cfg else "General"
+
+        # ✅ Fix path to align with supabase_storage.upload_idcard convention
+        path = f"ids/{event_name}/idcards/boat_{boat_number}.pdf"
+        pdf_bytes = fetch_signed_file(path)
 
         pdf_stream = BytesIO(pdf_bytes)
         pdf_stream.name = f"Boat_{boat_number}_IDCards.pdf"
+
         await query.message.reply_document(
             document=pdf_stream,
-            caption=f"🪪 ID Cards PDF for Boat {boat_number}"
+            caption=f"🪪 ID Cards PDF for Boat {boat_number} ({event_name})"
         )
     except Exception as e:
-        log_and_raise("Callback", "handling exportidcards", e)
+        await update.callback_query.message.reply_text("❌ Failed to fetch ID cards PDF.")
+        log_and_raise("Callback", f"handling exportidcards for boat {boat_number}", e)
 
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
@@ -169,17 +149,17 @@ async def init_bot():
         register_checkin_handlers(app)
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
-
-        # 📷 Attach Photo flow
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
         # Build webhook URL safely
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+        if not webhook_url.startswith("https://"):
+            logger.warning("[Bot] PUBLIC_URL is not HTTPS — Telegram will reject webhook")
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
         await app.bot.set_webhook(webhook_url)
 
-        # ✅ Start the bot so update_queue is active
+        # Start the bot so update_queue is active
         await app.initialize()
         await app.start()
 
@@ -188,5 +168,3 @@ async def init_bot():
 
     except Exception as e:
         log_and_raise("Bot Init", "initializing Telegram bot", e)
-
-

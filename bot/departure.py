@@ -1,18 +1,20 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from config.logger import logger, log_and_raise
-from config.envs import ADMIN_CHAT_ID
+from config.envs import ADMIN_CHAT_ID, DRY_RUN
 from db.init import get_db
-from db.models import Boat, BoardingSession, Booking
-from sheets.manager import export_manifest_pdf
+from db.models import Boat, BoardingSession, Booking, Config
 from datetime import datetime
+from utils.pdf_generator import generate_manifest_pdf
+from utils.idcards import generate_idcards_pdf
+from utils.supabase_storage import upload_manifest, upload_idcard
 
 # ===== /departed Command =====
 async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mark boat as departed and export manifest with scheduled vs actual info."""
+    """Mark boat as departed and export manifest + ID cards."""
     try:
         user_id = str(update.effective_user.id)
-        if user_id != ADMIN_CHAT_ID:
+        if str(ADMIN_CHAT_ID) != user_id:
             await update.message.reply_text("⛔ You are not authorized to run this command.")
             logger.warning(f"[Departure] Unauthorized /departed attempt by {user_id}")
             return
@@ -52,7 +54,7 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 session.ended_at = departure_time
                 logger.info(f"[Departure] Boarding session for Boat {boat_number} ended.")
 
-            # Build manifest summary: scheduled vs actual
+            # Build manifest summary
             bookings = db.query(Booking).filter(
                 (Booking.arrival_boat_boarded == boat_number) |
                 (Booking.departure_boat_boarded == boat_number)
@@ -65,15 +67,24 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"  Scheduled: Arr {b.arrival_time or '-'} / Dep {b.departure_time or '-'}\n"
                     f"  Actual: ArrBoat {b.arrival_boat_boarded or '-'} / DepBoat {b.departure_boat_boarded or '-'}"
                 )
-
             manifest_text = "\n".join(manifest_lines) if bookings else "No passengers logged."
+
+            # Get active event
+            active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
+            event_name = active_event_cfg.value if active_event_cfg else "General"
 
             db.commit()
 
-        # Export manifest (stub to external system)
-        manifest_summary = export_manifest_pdf(str(boat_number))
+        # Generate and upload PDFs
+        manifest_pdf = generate_manifest_pdf(str(boat_number), event_name=event_name)
+        idcards_pdf = generate_idcards_pdf(str(boat_number), event_name=event_name)
 
-        # Reply with summary + export button
+        if not DRY_RUN:
+            manifest_path = upload_manifest(manifest_pdf, event_name=event_name, boat_number=str(boat_number))
+            idcards_path = upload_idcard(idcards_pdf, event_name=event_name, ticket_ref=f"boat_{boat_number}")
+            logger.info(f"[Departure] Uploaded manifest to {manifest_path} and ID cards to {idcards_path}")
+
+        # Reply with summary + export buttons
         buttons = [
             [InlineKeyboardButton("📄 Export Manifest (PDF)", callback_data=f"exportpdf:{boat_number}")],
             [InlineKeyboardButton("🪪 Export ID Cards (PDF)", callback_data=f"exportidcards:{boat_number}")]
@@ -82,8 +93,7 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             f"🛥️ Boat {boat_number} departed at {departure_time.strftime('%H:%M')}.\n\n"
-            f"{manifest_text}\n\n"
-            f"{manifest_summary}",
+            f"{manifest_text}",
             reply_markup=reply_markup
         )
         logger.info(f"[Departure] Boat {boat_number} marked as departed and manifest export triggered.")

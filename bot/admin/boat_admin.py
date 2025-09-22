@@ -10,7 +10,7 @@ async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start boarding session for a boat."""
     try:
         user_id = str(update.effective_user.id)
-        if user_id != ADMIN_CHAT_ID:
+        if str(ADMIN_CHAT_ID) != user_id:
             await update.message.reply_text("⛔ You are not authorized to run this command.")
             return
 
@@ -33,8 +33,19 @@ async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 boat = Boat(boat_number=boat_number, capacity=seat_count, status="open")
                 db.add(boat)
 
-            db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).update({"is_active": False})
-            session = BoardingSession(boat_number=boat_number, started_by=user_id, is_active=True)
+            # End any active sessions
+            db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).update({
+                "is_active": False,
+                "ended_at": datetime.utcnow()
+            })
+
+            # Start new session
+            session = BoardingSession(
+                boat_number=boat_number,
+                started_by=user_id,
+                is_active=True,
+                started_at=datetime.utcnow()
+            )
             db.add(session)
             db.commit()
 
@@ -42,17 +53,16 @@ async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🛳 Boat {boat_number} is now boarding with {seat_count} seats.\n"
             f"Check-in mode is ready. Use /checkinmode to begin scanning."
         )
-        logger.info(f"[Admin] Boat {boat_number} boarding session started.")
+        logger.info(f"[Admin] Boat {boat_number} boarding session started by {user_id}.")
 
     except Exception as e:
         log_and_raise("Admin", "running /boatready", e)
-
 
 async def checkinmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Activate check-in mode for current boat session."""
     try:
         user_id = str(update.effective_user.id)
-        if user_id != ADMIN_CHAT_ID:
+        if str(ADMIN_CHAT_ID) != user_id:
             await update.message.reply_text("⛔ You are not authorized to run this command.")
             return
 
@@ -64,20 +74,20 @@ async def checkinmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         await update.message.reply_text(
-            f"✅ Check-in mode activated for Boat {session.boat_number}.\n"
+            f"✅ Check-in mode activated.\n"
+            f"Active Boat: {session.boat_number}\n"
             f"Use /i <id_number> or /p <phone_number> to check in passengers."
         )
-        logger.info(f"[Admin] Check-in mode activated for Boat {session.boat_number}.")
+        logger.info(f"[Admin] Check-in mode activated for Boat {session.boat_number} by {user_id}.")
 
     except Exception as e:
         log_and_raise("Admin", "running /checkinmode", e)
-
 
 async def editseats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Edit seat count for a boat during boarding."""
     try:
         user_id = str(update.effective_user.id)
-        if user_id != ADMIN_CHAT_ID:
+        if str(ADMIN_CHAT_ID) != user_id:
             await update.message.reply_text("⛔ You are not authorized to run this command.")
             return
 
@@ -100,7 +110,7 @@ async def editseats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
 
         await update.message.reply_text(f"✅ Boat {boat_number} seat count updated to {new_count}.")
-        logger.info(f"[Admin] Boat {boat_number} seat count updated to {new_count}.")
+        logger.info(f"[Admin] Boat {boat_number} seat count updated to {new_count} by {user_id}.")
 
     except Exception as e:
         log_and_raise("Admin", "running /editseats", e)

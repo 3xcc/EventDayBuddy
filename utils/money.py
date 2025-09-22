@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
 
 # Common currency prefixes/symbols you might encounter
@@ -6,8 +6,8 @@ CURRENCY_PREFIXES = ("rf", "mvr", "usd", "eur", "gbp", "$", "ރ")
 
 def parse_amount(value):
     """
-    Accepts strings like 'RF1000', '$400', '1,200.50', '400', 400.
-    Returns a Decimal or None if invalid.
+    Accepts strings like 'RF1000', '$400', '1,200.50', '400', 400, '1.200,50'.
+    Returns a Decimal quantized to 2 decimal places, or None if invalid.
     """
     if value is None:
         return None
@@ -15,7 +15,7 @@ def parse_amount(value):
     # Already numeric
     if isinstance(value, (int, float, Decimal)):
         try:
-            return Decimal(str(value))
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except InvalidOperation:
             return None
 
@@ -34,11 +34,18 @@ def parse_amount(value):
             s = s[: -len(pref)].strip()
             break
 
-    # Remove thousands separators and whitespace
-    s = s.replace(",", "")
+    # Handle European decimal format (e.g., "1.200,50")
+    if "," in s and s.count(",") == 1 and "." in s and s.index(",") > s.index("."):
+        # Assume last comma is decimal separator
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        # Remove thousands separators
+        s = s.replace(",", "")
+
+    # Remove whitespace
     s = re.sub(r"\s+", "", s)
 
-    # Strip out any non‑digit/non‑dot characters
+    # Strip out any non-digit/non-dot characters
     s = re.sub(r"[^0-9.]", "", s)
 
     # Guard against multiple dots
@@ -46,6 +53,6 @@ def parse_amount(value):
         return None
 
     try:
-        return Decimal(s)
+        return Decimal(s).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation:
         return None

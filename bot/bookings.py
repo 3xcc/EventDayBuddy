@@ -10,17 +10,9 @@ from utils.booking_parser import parse_booking_input
 from utils.photo import handle_photo_upload
 from services.booking_service import create_booking
 
-
 # ===== /newbooking Command =====
 async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Create a new booking:
-    - Reads active event from DB
-    - Checks for duplicate ID
-    - Saves booking to DB
-    - Appends to Master tab and event tab
-    - Optionally saves attached photo ID
-    """
+    """Create a new booking and append to DB + Sheets."""
     try:
         # Parse args or multi-line input
         if len(context.args) >= 5:
@@ -35,7 +27,18 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             arrival_time = context.args[8] if len(context.args) > 8 else None
             departure_time = context.args[9] if len(context.args) > 9 else None
         else:
-            name, id_number, phone, male_dep, resort_dep, paid_amount_raw, transfer_ref, ticket_type, arrival_time, departure_time = parse_booking_input(update.message.text)
+            parsed = parse_booking_input(update.message.text)
+            name = parsed["name"]
+            id_number = parsed["id_number"]
+            phone = parsed["phone"]
+            male_dep = parsed["male_dep"]
+            resort_dep = parsed["resort_dep"]
+            paid_amount_raw = parsed["paid_amount"]
+            transfer_ref = parsed["transfer_ref"]
+            ticket_type = parsed["ticket_type"]
+            arrival_time = parsed["arrival_time"]
+            departure_time = parsed["departure_time"]
+
             if not name or not id_number or not phone:
                 await update.message.reply_text(
                     "❌ Could not parse booking. Please use one of the supported formats:\n"
@@ -45,13 +48,13 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # ✅ Sanitize paid_amount
+        # Sanitize paid_amount
         paid_amount = parse_amount(paid_amount_raw)
         if paid_amount_raw and paid_amount is None:
             await update.message.reply_text("❌ Invalid amount. Use numbers like 400 or 1,200.50.")
             return
 
-        # Handle inline photo later, so skip auto-upload here
+        # Handle inline photo later
         id_doc_url = None
         if PHOTO_REQUIRED and not update.message.photo:
             await update.message.reply_text("❌ Photo ID is required for booking. Please attach a photo.")
@@ -64,7 +67,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             event_name = active_event_cfg.value
 
-            booking, ticket_ref = create_booking(
+            booking = create_booking(
                 db=db,
                 event_name=event_name,
                 name=name,
@@ -77,18 +80,30 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_type=ticket_type,
                 arrival_time=arrival_time,
                 departure_time=departure_time,
-                id_doc_url=id_doc_url
+                id_doc_url=id_doc_url,
             )
+            ticket_ref = booking.ticket_ref
 
-            # Prepare row for Sheets
+            # Prepare row for Sheets (must match MASTER_HEADERS order)
             booking_row = [
-                "", event_name, ticket_ref, name, id_number, phone,
-                male_dep or "", resort_dep or "",
-                arrival_time or "", departure_time or "",
+                "",  # No
+                event_name,
+                ticket_ref,
+                name,
+                id_number,
+                phone,
+                male_dep or "",
+                resort_dep or "",
                 str(paid_amount) if paid_amount is not None else "",
-                transfer_ref or "", ticket_type or "",
-                "", "", "", "booked",
-                id_doc_url or "", "", "", ""
+                transfer_ref or "",
+                ticket_type or "",
+                "",  # Check in Time
+                "booked",  # Status
+                id_doc_url or "",
+                arrival_time or "",
+                departure_time or "",
+                "",  # ArrivalBoatBoarded
+                "",  # DepartureBoatBoarded
             ]
             if not DRY_RUN:
                 append_to_master(event_name, booking_row)
@@ -101,7 +116,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"ID: {id_number}",
             f"Phone: {phone}",
             f"Event: {event_name}",
-            f"Ticket: {ticket_ref}"
+            f"Ticket: {ticket_ref}",
         ]
         if arrival_time: msg_lines.append(f"Arrival Time: {arrival_time}")
         if departure_time: msg_lines.append(f"Departure Time: {departure_time}")
@@ -117,7 +132,6 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Booking", "creating new booking", e)
 
-
 # ===== Callback for Attach Photo =====
 async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -126,23 +140,26 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data["awaiting_photo_for_booking"] = booking_id
     await query.message.reply_text("📷 Please send the ID photo now, and I’ll attach it to the booking.")
 
-
 # ===== Photo Handler =====
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     booking_id = context.user_data.get("awaiting_photo_for_booking")
     if not booking_id:
         return  # ignore random photos
 
-    file_url = await handle_photo_upload(update, f"booking_{booking_id}")
     with get_db() as db:
         booking = db.query(Booking).filter(Booking.id == booking_id).first()
-        if booking:
+        if not booking:
+            return
+
+        # Use ticket_ref for Supabase path
+        file_url = await handle_photo_upload(update, booking.ticket_ref)
+        if file_url:
             booking.id_doc_url = file_url
             db.commit()
             db.refresh(booking)
-            # Update Sheets
             if not DRY_RUN:
                 update_booking_photo(booking.event_name, booking.ticket_ref, file_url)
             await update.message.reply_text(f"✅ Photo attached to {booking.name} ({booking.ticket_ref})")
             logger.info(f"[Booking] Photo attached for {booking.name} ({booking.ticket_ref})")
+
     context.user_data.pop("awaiting_photo_for_booking", None)

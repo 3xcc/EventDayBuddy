@@ -1,23 +1,48 @@
-def parse_booking_input(update_text: str):
+from decimal import Decimal, InvalidOperation
+
+def parse_booking_input(update_text: str) -> dict:
+    """
+    Parse free-form booking text into a structured dict.
+    Expected fields: name, id_number, phone, male_dep, resort_dep,
+                     paid_amount, transfer_ref, ticket_type,
+                     arrival_time, departure_time
+    """
     lines = update_text.splitlines()
     lines = [l.strip() for l in lines if l.strip() and not l.strip().startswith("/newbooking")]
+
     cleaned = []
     for l in lines:
+        # Strip leading numbering like "1)" or "1."
         if len(l) > 2 and l[:2].isdigit() and l[2] in [")", "."]:
             l = l[3:].strip()
+        # Strip "Field: value" → "value"
         if ":" in l:
-            parts = l.split(":", 1)
-            l = parts[1].strip()
+            _, val = l.split(":", 1)
+            l = val.strip()
         cleaned.append(l)
-    return (
-        cleaned[0] if len(cleaned) > 0 else None,
-        cleaned[1] if len(cleaned) > 1 else None,
-        cleaned[2] if len(cleaned) > 2 else None,
-        cleaned[3] if len(cleaned) > 3 else None,
-        cleaned[4] if len(cleaned) > 4 else None,
-        cleaned[5] if len(cleaned) > 5 else None,
-        cleaned[6] if len(cleaned) > 6 else None,
-        cleaned[7] if len(cleaned) > 7 else None,
-        cleaned[8] if len(cleaned) > 8 else None,
-        cleaned[9] if len(cleaned) > 9 else None,
-    )
+
+    # Map into dict
+    fields = [
+        "name", "id_number", "phone", "male_dep", "resort_dep",
+        "paid_amount", "transfer_ref", "ticket_type",
+        "arrival_time", "departure_time"
+    ]
+    data = {field: cleaned[i] if i < len(cleaned) else None for i, field in enumerate(fields)}
+
+    # Normalize
+    if data["id_number"]:
+        data["id_number"] = data["id_number"].strip().upper()
+    if data["phone"]:
+        data["phone"] = "".join(ch for ch in data["phone"] if ch.isdigit() or ch == "+")
+    if data["paid_amount"]:
+        try:
+            data["paid_amount"] = Decimal(data["paid_amount"].replace(",", "").replace("$", ""))
+        except (InvalidOperation, AttributeError):
+            raise ValueError(f"Invalid amount format: {data['paid_amount']}")
+
+    # Validation
+    missing = [f for f in ["name", "id_number", "phone"] if not data.get(f)]
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+    return data

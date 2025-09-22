@@ -11,7 +11,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Register a user with a role (admin-only)."""
     try:
         caller_id = str(update.effective_user.id)
-        if caller_id != ADMIN_CHAT_ID:
+        if str(ADMIN_CHAT_ID) != caller_id:
             await update.message.reply_text("⛔ Only the admin can register users.")
             return
 
@@ -23,7 +23,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         target_chat_id = context.args[0].strip()
-        role = context.args[1].strip()
+        role = context.args[1].strip().lower()
         if role not in VALID_ROLES:
             await update.message.reply_text(f"❌ Invalid role. Valid roles: {', '.join(VALID_ROLES)}")
             return
@@ -34,8 +34,9 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 existing.role = role
                 logger.info(f"[Register] Updated role for {target_chat_id} to {role}")
             else:
-                db.add(User(chat_id=target_chat_id, role=role))
-                logger.info(f"[Register] Registered new user {target_chat_id} as {role}")
+                name = update.effective_user.full_name if update.effective_user else None
+                db.add(User(chat_id=target_chat_id, role=role, name=name))
+                logger.info(f"[Register] Registered new user {target_chat_id} as {role} ({name})")
             db.commit()
 
         await update.message.reply_text(f"✅ User {target_chat_id} registered as {role}.")
@@ -43,12 +44,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("UserAdmin", "registering user", e)
 
-
 async def unregister(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Unregister a user (admin-only)."""
     try:
         caller_id = str(update.effective_user.id)
-        if caller_id != ADMIN_CHAT_ID:
+        if str(ADMIN_CHAT_ID) != caller_id:
             await update.message.reply_text("⛔ Only the admin can unregister users.")
             return
 
@@ -60,10 +60,11 @@ async def unregister(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with get_db() as db:
             user = db.query(User).filter(User.chat_id == target_chat_id).first()
             if user:
+                display_name = user.name or target_chat_id
                 db.delete(user)
                 db.commit()
-                await update.message.reply_text(f"✅ Unregistered {user.name or target_chat_id}.")
-                logger.info(f"[Unregister] Removed user {target_chat_id}")
+                await update.message.reply_text(f"✅ Unregistered {display_name}.")
+                logger.info(f"[Unregister] Removed user {target_chat_id} ({display_name})")
             else:
                 await update.message.reply_text("⚠️ User not found.")
 

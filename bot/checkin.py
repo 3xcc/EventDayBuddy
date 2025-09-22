@@ -1,13 +1,12 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from config.logger import logger, log_and_raise
-from config.envs import ADMIN_CHAT_ID
+from config.envs import ADMIN_CHAT_ID, DRY_RUN
 from db.init import get_db
 from db.models import Booking, BoardingSession, CheckinLog, User, Config
 from sqlalchemy import or_
 from datetime import datetime
-from sheets.manager import update_booking_in_sheets  # ✅ new import
-
+from sheets.manager import update_booking_in_sheets
 
 # ===== Lookup and prompt =====
 async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -20,7 +19,6 @@ async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await handle_checkin(update, context, method="id")
 
-
 async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(
@@ -30,7 +28,6 @@ async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     await handle_checkin(update, context, method="phone")
-
 
 async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, method: str):
     try:
@@ -54,21 +51,25 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
                 return
             event_name = active_event_cfg.value
 
-            # Lookup booking
-            booking = db.query(Booking).filter(
-                Booking.status == "booked",
-                Booking.event_name == event_name,
-                or_(
-                    Booking.id_number.ilike(query) if method == "id" else False,
-                    Booking.phone.ilike(query) if method == "phone" else False
-                )
-            ).first()
+            # Build filter dynamically
+            if method == "id":
+                booking = db.query(Booking).filter(
+                    Booking.status == "booked",
+                    Booking.event_name == event_name,
+                    Booking.id_number.ilike(f"%{query}%")
+                ).first()
+            else:  # phone
+                booking = db.query(Booking).filter(
+                    Booking.status == "booked",
+                    Booking.event_name == event_name,
+                    Booking.phone.ilike(f"%{query}%")
+                ).first()
 
             if not booking:
                 await update.message.reply_text(f"❌ No booking found for {method}: {query}")
                 return
 
-            # Show photo + confirm buttons for ARRIVAL vs DEPARTURE
+            # Show photo + confirm buttons
             buttons = [
                 [InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")],
                 [InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")]
@@ -83,7 +84,6 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
 
     except Exception as e:
         log_and_raise("Checkin", f"handling /{method}", e)
-
 
 # ===== Confirm boarding callback =====
 async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -127,20 +127,20 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
             db.refresh(booking)
 
-        # ✅ Push update to Sheets
-        try:
-            update_booking_in_sheets(booking.event_name, booking)
-        except Exception as e:
-            logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
+        # Push update to Sheets
+        if not DRY_RUN:
+            try:
+                update_booking_in_sheets(booking.event_name, booking)
+            except Exception as e:
+                logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
         await query.edit_message_text(
             f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
         )
-        logger.info(f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} by {user_id}")
+        logger.info(f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} by {user_id} (event={booking.event_name})")
 
     except Exception as e:
         log_and_raise("Checkin", "confirming boarding", e)
-
 
 # ===== Handler registration =====
 def register_checkin_handlers(app):

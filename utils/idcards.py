@@ -1,11 +1,11 @@
+import io
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
-import io
-import requests
 from config.logger import logger
 from sheets.manager import get_manifest_rows
+from utils.supabase_storage import fetch_signed_file
 
 def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
     """
@@ -33,10 +33,18 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
         x = margin_x
         y = page_height - margin_y - card_height
 
+        # Page header
+        def draw_page_header():
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(page_width / 2, page_height - 15 * mm,
+                                f"Event: {event_name or 'General'} | Boat: {boat_number}")
+
+        draw_page_header()
+
         for i, row in enumerate(rows, start=1):
             name = row.get("Name", "")
             id_number = row.get("ID", "")
-            photo_url = row.get("ID Doc URL", "")
+            photo_path = row.get("ID Doc URL", "")
             event = row.get("Event", event_name or "")
             boat = boat_number
 
@@ -45,32 +53,27 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
 
             # Name + ID
             c.setFont("Helvetica-Bold", 12)
-            c.drawString(x + 10, y + card_height - 20, name)
+            c.drawString(x + 10, y + card_height - 20, name or "Unknown")
             c.setFont("Helvetica", 10)
-            c.drawString(x + 10, y + card_height - 35, f"ID: {id_number}")
+            c.drawString(x + 10, y + card_height - 35, f"ID: {id_number or 'N/A'}")
 
             # Photo (top-right)
-            photo_x = x + card_width - 40*mm
+            photo_x = x + card_width - 40 * mm
             photo_y = y + 10
-            if photo_url:
+            if photo_path:
                 try:
-                    resp = requests.get(photo_url, timeout=5)
-                    if resp.status_code == 200:
-                        img = ImageReader(io.BytesIO(resp.content))
-                        c.drawImage(img, photo_x, photo_y, 30*mm, 40*mm, preserveAspectRatio=True)
-                    else:
-                        c.rect(photo_x, photo_y, 30*mm, 40*mm)
-                        c.setFont("Helvetica", 8)
-                        c.drawCentredString(photo_x + 15*mm, photo_y + 20*mm, "No Photo")
+                    photo_bytes = fetch_signed_file(photo_path, expiry=60)
+                    img = ImageReader(io.BytesIO(photo_bytes))
+                    c.drawImage(img, photo_x, photo_y, 30 * mm, 40 * mm, preserveAspectRatio=True)
                 except Exception as e:
                     logger.warning(f"[IDCards] Failed to load photo for {name}: {e}")
-                    c.rect(photo_x, photo_y, 30*mm, 40*mm)
+                    c.rect(photo_x, photo_y, 30 * mm, 40 * mm)
                     c.setFont("Helvetica", 8)
-                    c.drawCentredString(photo_x + 15*mm, photo_y + 20*mm, "No Photo")
+                    c.drawCentredString(photo_x + 15 * mm, photo_y + 20 * mm, "No Photo")
             else:
-                c.rect(photo_x, photo_y, 30*mm, 40*mm)
+                c.rect(photo_x, photo_y, 30 * mm, 40 * mm)
                 c.setFont("Helvetica", 8)
-                c.drawCentredString(photo_x + 15*mm, photo_y + 20*mm, "No Photo")
+                c.drawCentredString(photo_x + 15 * mm, photo_y + 20 * mm, "No Photo")
 
             # Footer (event + boat)
             c.setFont("Helvetica-Oblique", 8)
@@ -85,6 +88,13 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
                 c.showPage()
                 x = margin_x
                 y = page_height - margin_y - card_height
+                draw_page_header()
+
+        # Add summary page
+        c.showPage()
+        c.setFont("Helvetica-Bold", 16)
+        c.drawCentredString(page_width / 2, page_height / 2,
+                            f"Total ID Cards Generated: {len(rows)}")
 
         c.save()
         pdf_bytes = buffer.getvalue()

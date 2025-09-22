@@ -24,16 +24,18 @@ GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
 if not GOOGLE_CREDS_JSON:
     log_and_raise("Env", "loading GOOGLE_CREDS_JSON", Exception("GOOGLE_CREDS_JSON is not set"))
 
-# Google Drive folder IDs
+# ===== Supabase =====
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+if not SUPABASE_URL:
+    log_and_raise("Env", "loading SUPABASE_URL", Exception("SUPABASE_URL is not set"))
 
-DRIVE_MANIFESTS_FOLDER_ID = os.getenv("DRIVE_MANIFESTS_FOLDER_ID")
-if not DRIVE_MANIFESTS_FOLDER_ID:
-    log_and_raise("Env", "loading DRIVE_MANIFESTS_FOLDER_ID", Exception("DRIVE_MANIFESTS_FOLDER_ID is not set"))
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+if not SUPABASE_KEY:
+    log_and_raise("Env", "loading SUPABASE_KEY", Exception("SUPABASE_KEY is not set"))
 
-DRIVE_IDS_FOLDER_ID = os.getenv("DRIVE_IDS_FOLDER_ID")
-if not DRIVE_IDS_FOLDER_ID:
-    log_and_raise("Env", "loading DRIVE_IDS_FOLDER_ID", Exception("DRIVE_IDS_FOLDER_ID is not set"))
-
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET")
+if not SUPABASE_BUCKET:
+    log_and_raise("Env", "loading SUPABASE_BUCKET", Exception("SUPABASE_BUCKET is not set"))
 
 # ===== Optional Settings =====
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()

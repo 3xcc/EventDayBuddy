@@ -1,5 +1,12 @@
+import uuid
 from db.models import Booking
 from config.logger import logger
+
+def generate_ticket_ref(event_name: str) -> str:
+    """Generate a unique ticket reference with event prefix and short UUID."""
+    prefix = event_name[:3].upper()
+    unique_suffix = str(uuid.uuid4())[:8].upper()
+    return f"{prefix}-{unique_suffix}"
 
 def create_booking(
     db,
@@ -16,23 +23,29 @@ def create_booking(
     departure_time,
     id_doc_url=None,
 ):
+    # === Validation ===
+    if not all([event_name, name, id_number]):
+        raise ValueError("Missing required booking fields: event_name, name, id_number")
+
+    # Normalize inputs
+    id_number = id_number.strip().upper()
+    phone = phone.strip() if phone else None
+
     # Deduplication
     existing = db.query(Booking).filter(
         Booking.event_name == event_name,
-        Booking.id_number.ilike(id_number)
+        Booking.id_number == id_number
     ).first()
     if existing:
         raise Exception(f"Booking already exists for {existing.name} ({existing.id_number})")
 
     # Generate ticket reference
-    prefix = event_name[:3].upper()
-    count = db.query(Booking).filter(Booking.event_name == event_name).count()
-    ticket_ref = f"{prefix}-{count + 1:03}"
+    ticket_ref = generate_ticket_ref(event_name)
 
     booking = Booking(
         event_name=event_name,
         ticket_ref=ticket_ref,
-        name=name,
+        name=name.strip(),
         id_number=id_number,
         phone=phone,
         male_dep=male_dep,
@@ -49,8 +62,8 @@ def create_booking(
         db.add(booking)
         db.commit()
         db.refresh(booking)
-        logger.info(f"[Booking] Created booking {booking.id} ({ticket_ref}) for {name}")
-        return booking, ticket_ref
+        logger.info(f"[Booking] Created booking {booking.id} ({booking.ticket_ref}) for {booking.name}")
+        return booking
     except Exception as e:
         db.rollback()
         logger.error(f"[Booking] Failed to create booking: {e}", exc_info=True)
