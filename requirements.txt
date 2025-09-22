@@ -2,10 +2,10 @@
 python-telegram-bot==20.3
 
 # Database
-SQLAlchemy
-psycopg[binary]
+SQLAlchemy==2.0.21
+psycopg[binary]==3.1.12
 
-# Google Sheets API (still needed for spreadsheet sync)
+# Google Sheets API
 google-api-python-client==2.97.0
 google-auth==2.23.0
 
@@ -13,18 +13,21 @@ google-auth==2.23.0
 fastapi==0.103.1
 uvicorn[standard]==0.23.2
 
-# HTTP requests (used for Supabase fetches, admin alerts)
+# HTTP requests
 requests==2.31.0
 
 # PDF generation
 reportlab==4.0.4
 # or fpdf2==2.7.6
 
-# Environment variable loading (optional for local dev)
+# Environment variable loading
 python-dotenv==1.0.0
 
-# DB migrations (optional but recommended)
+# DB migrations
 alembic==1.12.0
 
-# Supabase client
-supabase>=2.0.0
+# Supabase client (with compatible deps)
+supabase==2.4.0
+httpx<0.28
+gotrue>=2.0.0
+postgrest>=0.13.0
