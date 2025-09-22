@@ -27,4 +27,4 @@ python-dotenv==1.0.0
 alembic==1.12.0
 
 # Supabase client
-supabase-py==1.0.3
+supabase>=2.0.0
