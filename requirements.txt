@@ -2,8 +2,9 @@
 python-telegram-bot==20.3
 
 # Database
-SQLAlchemy==2.0.21
-psycopg[binary]==3.2.10
+SQLAlchemy
+psycopg[binary]
+
 
 # Google Sheets API
 google-api-python-client==2.97.0
