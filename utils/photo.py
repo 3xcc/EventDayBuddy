@@ -44,7 +44,7 @@ async def handle_photo_upload(update, id_number: str) -> str:
 
         # --- Step 3: Download into memory ---
         file_bytes = io.BytesIO()
-        await file.download(out=file_bytes)
+        await file.download_to_memory(out=file_bytes)   
         file_bytes.seek(0)
 
         # --- Step 4: Validate / normalize format ---
