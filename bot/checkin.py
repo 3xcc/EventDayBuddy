@@ -1,3 +1,4 @@
+import io
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from config.logger import logger, log_and_raise
@@ -7,6 +8,7 @@ from db.models import Booking, BoardingSession, CheckinLog, User, Config
 from sqlalchemy import or_
 from datetime import datetime
 from sheets.manager import update_booking_in_sheets
+from utils.supabase_storage import fetch_signed_file  # ✅ added import
 
 # ===== Lookup and prompt =====
 async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,7 +80,17 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
 
             caption = f"👤 {booking.name}\nID: {booking.id_number}\nPhone: {booking.phone}"
             if booking.id_doc_url:
-                await update.message.reply_photo(photo=booking.id_doc_url, caption=caption, reply_markup=reply_markup)
+                try:
+                    # ✅ Fetch the file bytes from Supabase and send as file-like object
+                    photo_bytes = fetch_signed_file(booking.id_doc_url, expiry=60)
+                    await update.message.reply_photo(
+                        photo=io.BytesIO(photo_bytes),
+                        caption=caption,
+                        reply_markup=reply_markup
+                    )
+                except Exception as e:
+                    logger.warning(f"[Checkin] Failed to fetch photo for {booking.name}: {e}")
+                    await update.message.reply_text(caption + "\n(Photo unavailable)", reply_markup=reply_markup)
             else:
                 await update.message.reply_text(caption + "\n(No photo available)", reply_markup=reply_markup)
 
