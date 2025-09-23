@@ -28,7 +28,7 @@ python-dotenv==1.0.0
 alembic==1.12.0
 
 # Supabase client (with compatible deps)
-gotrue==1.0.4
+gotrue
 httpx==0.24.1
 supabase==2.4.0
 postgrest==0.13.0
