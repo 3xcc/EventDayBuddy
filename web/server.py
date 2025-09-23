@@ -1,6 +1,6 @@
 import os
 from fastapi.responses import JSONResponse
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from config.logger import logger
 from config.envs import LOG_LEVEL, TELEGRAM_TOKEN
