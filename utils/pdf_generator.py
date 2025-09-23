@@ -7,7 +7,7 @@ from reportlab.pdfgen import canvas
 def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
     """
     Generate a manifest PDF for a given boat (and optional event filter).
-    Includes headers on each page and a passenger count summary.
+    Shows only Name, ID number, Phone number, and Boarded Boat.
     Returns PDF as bytes.
     """
     try:
@@ -34,10 +34,9 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
             c.setFont("Helvetica-Bold", 10)
             c.drawString(50, y, "No.")
             c.drawString(80, y, "Name")
-            c.drawString(220, y, "ID")
-            c.drawString(320, y, "Phone")
-            c.drawString(420, y, "Sched Arr/Dep")
-            c.drawString(520, y, "Actual Arr/Dep")
+            c.drawString(220, y, "ID Number")
+            c.drawString(360, y, "Phone")
+            c.drawString(480, y, "Boarded Boat")
             c.setFont("Helvetica", 10)
 
         # First page header
@@ -48,20 +47,16 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
 
         # Passenger rows
         for idx, row in enumerate(manifest, start=1):
-            name = row.get("Name", "")[:25]  # truncate to avoid overlap
+            name = row.get("Name", "")[:25]
             id_number = row.get("ID", "")[:15]
             phone = row.get("Number", "")[:15]
-            sched_arr = row.get("ArrivalTime", "-")
-            sched_dep = row.get("DepartureTime", "-")
-            actual_arr_boat = row.get("ArrivalBoatBoarded", "-")
-            actual_dep_boat = row.get("DepartureBoatBoarded", "-")
+            boarded_boat = row.get("ArrivalBoatBoarded") or row.get("DepartureBoatBoarded") or "-"
 
             c.drawString(50, y, str(idx))
             c.drawString(80, y, name)
             c.drawString(220, y, id_number)
-            c.drawString(320, y, phone)
-            c.drawString(420, y, f"{sched_arr}/{sched_dep}")
-            c.drawString(520, y, f"{actual_arr_boat}/{actual_dep_boat}")
+            c.drawString(360, y, phone)
+            c.drawString(480, y, str(boarded_boat))
 
             y -= 18
             if y < 70:  # new page
@@ -71,11 +66,11 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
                 draw_headers(y)
                 y -= 20
 
-        # Summary footer at fixed position
+        # Summary footer
         c.setFont("Helvetica-Bold", 12)
         c.drawString(50, 40, f"Total Passengers: {len(manifest)}")
 
-        # If no passengers, watermark
+        # Watermark if empty
         if not manifest:
             c.setFont("Helvetica-Bold", 20)
             c.drawCentredString(page_width / 2, page_height / 2, "NO PASSENGERS")
