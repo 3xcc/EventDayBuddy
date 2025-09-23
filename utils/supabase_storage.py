@@ -41,7 +41,12 @@ def upload_manifest(pdf_bytes: bytes, event_name: str, boat_number: str) -> str:
         raise ValueError("Invalid file type. Only PDF allowed.")
 
     path = f"manifests/{event_name}/boat_{boat_number}.pdf"
-    res = supabase.storage.from_(SUPABASE_BUCKET).upload(path, pdf_bytes, {"upsert": True})
+    res = supabase.storage.from_(SUPABASE_BUCKET).upload(
+        path,
+        pdf_bytes,
+        {"x-upsert": "true"}   # ✅ fix here
+    )
+
     if isinstance(res, dict) and res.get("error"):
         raise RuntimeError(f"Supabase upload failed: {res['error']}")
     return path
@@ -52,7 +57,12 @@ def upload_idcard(pdf_bytes: bytes, event_name: str, ticket_ref: str) -> str:
         raise ValueError("Invalid file type. Only PDF allowed.")
 
     path = f"ids/{event_name}/idcards/{ticket_ref}.pdf"
-    res = supabase.storage.from_(SUPABASE_BUCKET).upload(path, pdf_bytes, {"upsert": True})
+    res = supabase.storage.from_(SUPABASE_BUCKET).upload(
+        path,
+        pdf_bytes,
+        {"x-upsert": "true"}   # ✅ fix here
+    )
+
     if isinstance(res, dict) and res.get("error"):
         raise RuntimeError(f"Supabase upload failed: {res['error']}")
     return path
