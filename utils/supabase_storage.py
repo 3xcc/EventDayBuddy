@@ -24,7 +24,13 @@ def upload_id_photo(file_bytes: bytes, event_name: str, ticket_ref: str) -> str:
         raise ValueError("Invalid image file. Could not open.")
 
     path = f"ids/{event_name}/{ticket_ref}.jpg"
-    res = supabase.storage.from_(SUPABASE_BUCKET).upload(path, file_bytes, {"upsert": True})
+    
+    res = supabase.storage.from_(SUPABASE_BUCKET).upload(
+    path,
+    file_bytes,
+    {"x-upsert": "true"}   # correct header
+    )
+
     if isinstance(res, dict) and res.get("error"):
         raise RuntimeError(f"Supabase upload failed: {res['error']}")
     return path
