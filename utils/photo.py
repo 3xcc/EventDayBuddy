@@ -4,7 +4,7 @@ from utils.supabase_storage import upload_id_photo
 from PIL import Image
 
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
-ALLOWED_FORMATS = {"JPEG", "PNG"}
+ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}  # expand if you want
 
 async def handle_photo_upload(update, id_number: str) -> str:
     try:
@@ -25,12 +25,14 @@ async def handle_photo_upload(update, id_number: str) -> str:
                 return None
 
         # --- Step 1: Get file (photo or document) ---
-        file = None
+        mime_type = None
         if message.photo:
             photo = message.photo[-1]  # highest resolution
             file = await photo.get_file()
+            mime_type = "image/jpeg"  # Telegram photos are always JPEG
         elif message.document and message.document.mime_type.startswith("image/"):
             file = await message.document.get_file()
+            mime_type = message.document.mime_type
         else:
             await message.reply_text("⚠️ Please send a photo or image file (JPEG/PNG under 5MB).")
             logger.warning(f"[Photo] No valid photo/document found in update from {user_id}")
@@ -44,20 +46,21 @@ async def handle_photo_upload(update, id_number: str) -> str:
 
         # --- Step 3: Download into memory ---
         file_bytes = io.BytesIO()
-        await file.download_to_memory(out=file_bytes)   
+        await file.download_to_memory(out=file_bytes)
         file_bytes.seek(0)
 
         # --- Step 4: Validate / normalize format ---
         try:
             img = Image.open(file_bytes)
             img_format = img.format.upper()
-            logger.info(f"[Photo] Received format={img_format}, size={file.file_size}, mime={file.mime_type}")
+            logger.info(f"[Photo] Received format={img_format}, size={file.file_size}, mime={mime_type}")
 
             if img_format not in ALLOWED_FORMATS:
-                # Convert unsupported formats (e.g. WEBP) to JPEG
-                file_bytes = io.BytesIO()
-                img.convert("RGB").save(file_bytes, format="JPEG")
-                file_bytes.seek(0)
+                # Convert unsupported formats (e.g. HEIC, WEBP) to JPEG
+                converted = io.BytesIO()
+                img.convert("RGB").save(converted, format="JPEG")
+                converted.seek(0)
+                file_bytes = converted
                 img_format = "JPEG"
                 logger.info(f"[Photo] Converted image to JPEG for {id_number}")
 
