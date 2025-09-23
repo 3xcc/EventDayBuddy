@@ -56,7 +56,6 @@ async def handle_photo_upload(update, id_number: str) -> str:
             logger.info(f"[Photo] Received format={img_format}, size={file.file_size}, mime={mime_type}")
 
             if img_format not in ALLOWED_FORMATS:
-                # Convert unsupported formats (e.g. HEIC, WEBP) to JPEG
                 converted = io.BytesIO()
                 img.convert("RGB").save(converted, format="JPEG")
                 converted.seek(0)
@@ -65,8 +64,9 @@ async def handle_photo_upload(update, id_number: str) -> str:
                 logger.info(f"[Photo] Converted image to JPEG for {id_number}")
 
         except Exception as e:
-            await message.reply_text("❌ Could not read image. Please upload a valid JPEG/PNG.")
+            print("Image open error:", e)  # guaranteed to show in Render logs
             logger.warning(f"[Photo] Failed to open image for {id_number}: {e}")
+            await message.reply_text("❌ Could not read image. Please upload a valid JPEG/PNG.")
             return None
 
         # --- Step 5: Normalize ID for path ---
@@ -89,6 +89,7 @@ async def handle_photo_upload(update, id_number: str) -> str:
         return path
 
     except Exception as e:
+        print("Outer exception:", e)  # ensure visibility
         logger.error(f"[Photo] Failed to upload photo for {id_number}: {e}", exc_info=True)
         await update.message.reply_text("❌ Failed to process photo. Please try again.")
         return None
