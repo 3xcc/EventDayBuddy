@@ -29,6 +29,6 @@ alembic==1.12.0
 
 # Supabase client (with compatible deps)
 supabase==2.4.0
+gotrue==1.3.0
 httpx==0.24.1
-gotrue==1.0.4
 postgrest==0.15.0
