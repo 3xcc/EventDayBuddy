@@ -146,8 +146,8 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
-        await query.edit_message_text(
-            f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
+        await query.edit_message_caption(
+            caption=f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
         )
         logger.info(f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} by {user_id} (event={booking.event_name})")
 
