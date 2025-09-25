@@ -160,6 +160,11 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_and_raise("Checkin", "confirming boarding", e)
 
 # ===== Handler registration =====
-@require_role("checkin_staff")
 def register_checkin_handlers(app):
-    app.add_handler(CallbackQueryHandler(confirm_boarding, pattern=r"^confirm:(arrival|departure):\d+$"))
+    """Register all check-in related handlers on the bot application."""
+    app.add_handler(
+        CallbackQueryHandler(
+            require_role("checkin_staff")(confirm_boarding),
+            pattern=r"^confirm:(arrival|departure):\d+$"
+        )
+    )
