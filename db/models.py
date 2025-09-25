@@ -76,8 +76,32 @@ class Booking(Base, TimestampMixin):
 
     checkins = relationship("CheckinLog", back_populates="booking", cascade="all, delete-orphan", passive_deletes=True)
 
+    edit_logs = relationship(
+        "BookingEditLog",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     def __repr__(self):
         return f"<Booking ticket_ref={self.ticket_ref} name={self.name} status={self.status}>"
+
+# ===== Booking Edit Log =====
+
+class BookingEditLog(Base):
+    __tablename__ = "booking_edit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False)
+    field = Column(String, nullable=False)
+    old_value = Column(String)
+    new_value = Column(String)
+    edited_by = Column(String, nullable=False)
+    edited_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship back to booking
+    booking = relationship("Booking", back_populates="edit_logs")
+
 
 # ===== Booking Group =====
 class BookingGroup(Base, TimestampMixin):
