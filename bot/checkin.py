@@ -1,15 +1,16 @@
 import io
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from config.logger import logger, log_and_raise
-from config.envs import ADMIN_CHAT_ID, DRY_RUN
+from config.envs import DRY_RUN
 from db.init import get_db
-from db.models import Booking, BoardingSession, CheckinLog, User, Config
-from sqlalchemy import or_
-from datetime import datetime
+from db.models import Booking, BoardingSession, CheckinLog, Config
+from utils.supabase_storage import fetch_signed_file
+from utils.booking_schema import build_master_row, build_event_row
 from sheets.manager import update_booking
-from utils.supabase_storage import fetch_signed_file  # ✅ added impor
 from bot.utils.roles import require_role
+
 
 # ===== Lookup and prompt =====
 @require_role("checkin_staff")
@@ -23,6 +24,7 @@ async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await handle_checkin(update, context, method="id")
 
+
 @require_role("checkin_staff")
 async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -34,37 +36,37 @@ async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await handle_checkin(update, context, method="phone")
 
-@require_role("checkin_staff")
+
 async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, method: str):
+    """Shared logic for /i and /p commands."""
     try:
-        user_id = str(update.effective_user.id)
         query = context.args[0] if context.args else None
         if not query:
             await update.message.reply_text(f"Usage: /{method} <value>")
             return
 
         with get_db() as db:
-            # Get active boat session
+            # Active session
             session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
             if not session:
                 await update.message.reply_text("⚠️ No active boat session. Use /boatready first.")
                 return
 
-            # Get active event name
+            # Active event
             active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
             if not active_event_cfg or not active_event_cfg.value:
                 await update.message.reply_text("⛔ No active event set. Use /cpe first.")
                 return
             event_name = active_event_cfg.value
 
-            # Build filter dynamically
+            # Lookup booking
             if method == "id":
                 booking = db.query(Booking).filter(
                     Booking.status == "booked",
                     Booking.event_name == event_name,
                     Booking.id_number.ilike(f"%{query}%")
                 ).first()
-            else:  # phone
+            else:
                 booking = db.query(Booking).filter(
                     Booking.status == "booked",
                     Booking.event_name == event_name,
@@ -75,7 +77,7 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
                 await update.message.reply_text(f"❌ No booking found for {method}: {query}")
                 return
 
-            # Show photo + confirm buttons
+            # Prompt with photo + buttons
             buttons = [
                 [InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")],
                 [InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")]
@@ -85,7 +87,6 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
             caption = f"👤 {booking.name}\nID: {booking.id_number}\nPhone: {booking.phone}"
             if booking.id_doc_url:
                 try:
-                    # ✅ Fetch the file bytes from Supabase and send as file-like object
                     photo_bytes = fetch_signed_file(booking.id_doc_url, expiry=60)
                     await update.message.reply_photo(
                         photo=io.BytesIO(photo_bytes),
@@ -100,6 +101,7 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
 
     except Exception as e:
         log_and_raise("Checkin", f"handling /{method}", e)
+
 
 # ===== Confirm boarding callback =====
 @require_role("checkin_staff")
@@ -144,6 +146,28 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
             db.refresh(booking)
 
+            # Build rows for Sheets sync
+            event_name = booking.event_name
+            booking_dict = {
+                "ticket_ref": booking.ticket_ref,
+                "name": booking.name,
+                "id_number": booking.id_number,
+                "phone": booking.phone,
+                "male_dep": booking.male_dep,
+                "resort_dep": booking.resort_dep,
+                "arrival_time": booking.arrival_time,
+                "departure_time": booking.departure_time,
+                "paid_amount": booking.paid_amount,
+                "transfer_ref": booking.transfer_ref,
+                "ticket_type": booking.ticket_type,
+                "status": booking.status,
+                "id_doc_url": booking.id_doc_url,
+                "group_id": booking.group_id,
+                "created_at": booking.created_at,
+            }
+            master_row = build_master_row(booking_dict, event_name)
+            event_row = build_event_row(master_row)
+
         # Push update to Sheets
         if not DRY_RUN:
             try:
@@ -154,10 +178,14 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_caption(
             caption=f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
         )
-        logger.info(f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} by {user_id} (event={booking.event_name})")
+        logger.info(
+            f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} "
+            f"by {user_id} (event={booking.event_name})"
+        )
 
     except Exception as e:
         log_and_raise("Checkin", "confirming boarding", e)
+
 
 # ===== Handler registration =====
 def register_checkin_handlers(app):
