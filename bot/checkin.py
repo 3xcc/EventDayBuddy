@@ -8,7 +8,8 @@ from db.models import Booking, BoardingSession, CheckinLog, User, Config
 from sqlalchemy import or_
 from datetime import datetime
 from sheets.manager import update_booking
-from utils.supabase_storage import fetch_signed_file  # ✅ added import
+from utils.supabase_storage import fetch_signed_file  # ✅ added impor
+from bot.utils.roles import require_role
 
 # ===== Lookup and prompt =====
 @require_role("checkin_staff")
