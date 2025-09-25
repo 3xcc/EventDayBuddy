@@ -7,7 +7,7 @@ from db.init import get_db
 from db.models import Booking, BoardingSession, CheckinLog, User, Config
 from sqlalchemy import or_
 from datetime import datetime
-from sheets.manager import update_booking_in_sheets
+from sheets.manager import update_booking
 from utils.supabase_storage import fetch_signed_file  # ✅ added import
 
 # ===== Lookup and prompt =====
@@ -146,7 +146,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Push update to Sheets
         if not DRY_RUN:
             try:
-                update_booking_in_sheets(booking.event_name, booking)
+                update_booking(event_name, master_row, event_row)
             except Exception as e:
                 logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
