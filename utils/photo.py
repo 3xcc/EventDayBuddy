@@ -3,6 +3,7 @@ from config.logger import logger
 from utils.supabase_storage import upload_id_photo
 from PIL import Image
 
+
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}  # expand if you want
 

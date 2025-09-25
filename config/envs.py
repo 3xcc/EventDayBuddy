@@ -1,6 +1,18 @@
 import os
 from config.logger import log_and_raise
 
+# ===== Env Helpers =====
+def get_bool_env(key: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable."""
+    return os.getenv(key, str(default)).lower() in ("1", "true", "yes")
+
+def get_int_env(key: str, default: int = 0) -> int:
+    """Parse an integer environment variable."""
+    try:
+        return int(os.getenv(key, default))
+    except (TypeError, ValueError):
+        return default
+
 # ===== Database =====
 DB_URL = os.getenv("DB_URL")
 if not DB_URL:
@@ -39,14 +51,14 @@ if not SUPABASE_BUCKET:
 
 # ===== Optional Settings =====
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+DRY_RUN = get_bool_env("DRY_RUN", False)
 
 # Feature toggles for ops behavior
-CHECKIN_STRICT = os.getenv("CHECKIN_STRICT", "false").lower() == "true"
-PHOTO_REQUIRED = os.getenv("PHOTO_REQUIRED", "false").lower() == "true"
+CHECKIN_STRICT = get_bool_env("CHECKIN_STRICT", False)
+PHOTO_REQUIRED = get_bool_env("PHOTO_REQUIRED", False)
 
 # Example numeric setting (future use)
-# MAX_SEATS_DEFAULT = int(os.getenv("MAX_SEATS_DEFAULT", "60"))
+# MAX_SEATS_DEFAULT = get_int_env("MAX_SEATS_DEFAULT", 60)
 
 # Public URL for webhook
 PUBLIC_URL = os.getenv("PUBLIC_URL")
@@ -54,5 +66,15 @@ if not PUBLIC_URL:
     log_and_raise("Env", "loading PUBLIC_URL", Exception("PUBLIC_URL is not set"))
 
 # Boarding flow toggles
-WAITLIST_AUTO_ASSIGN = os.getenv("WAITLIST_AUTO_ASSIGN", "false").lower() == "true"
-GROUP_CHECKIN_PROMPT = os.getenv("GROUP_CHECKIN_PROMPT", "false").lower() == "true"
+WAITLIST_AUTO_ASSIGN = get_bool_env("WAITLIST_AUTO_ASSIGN", False)
+GROUP_CHECKIN_PROMPT = get_bool_env("GROUP_CHECKIN_PROMPT", False)
+
+# ===== CORS Settings =====
+# Comma-separated list of allowed origins in production, e.g. "https://myapp.com,https://admin.myapp.com"
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+
+# Normalize into list
+if CORS_ALLOWED_ORIGINS == "*":
+    ALLOWED_ORIGINS = ["*"]
+else:
+    ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]

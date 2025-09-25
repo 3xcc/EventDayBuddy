@@ -5,6 +5,8 @@ from reportlab.lib.utils import ImageReader
 from config.logger import logger
 from sheets.manager import get_manifest_rows
 from utils.supabase_storage import fetch_signed_file
+from utils.pdf_common import draw_header, draw_footer
+
 
 def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
     """
@@ -29,33 +31,18 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
         total_pages = (len(rows) + cards_per_page - 1) // cards_per_page
         current_page = 1
 
-        def draw_page_header():
-            c.setFont("Helvetica-Bold", 14)
-            c.drawCentredString(
-                page_width / 2,
-                page_height - 20,
-                f"Event: {event_name or 'General'} | Boat: {boat_number}"
-            )
-
-        def draw_page_footer(page_num):
-            c.setFont("Helvetica-Oblique", 9)
-            c.drawCentredString(
-                page_width / 2,
-                15,
-                f"Page {page_num} of {total_pages + 1}"  # +1 for summary page
-            )
-
-        draw_page_header()
+        # First page header
+        draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}", landscape_mode=True)
 
         for idx, row in enumerate(rows):
             col = idx % cols
             row_idx = (idx // cols) % rows_per_page
 
             if idx > 0 and idx % cards_per_page == 0:
-                draw_page_footer(current_page)
+                draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
                 c.showPage()
                 current_page += 1
-                draw_page_header()
+                draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}", landscape_mode=True)
 
             x = col * card_width
             y = page_height - (row_idx + 1) * card_height
@@ -66,9 +53,9 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
 
             # Caption
             c.setFont("Helvetica-Bold", 12)
-            c.drawCentredString(x + card_width/2, y + card_height - 25, name)
+            c.drawCentredString(x + card_width / 2, y + card_height - 25, name)
             c.setFont("Helvetica", 10)
-            c.drawCentredString(x + card_width/2, y + card_height - 40, f"Phone: {phone}")
+            c.drawCentredString(x + card_width / 2, y + card_height - 40, f"Phone: {phone}")
 
             # Photo area
             photo_x = x + 10
@@ -80,27 +67,33 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
                 try:
                     photo_bytes = fetch_signed_file(photo_path, expiry=60)
                     img = ImageReader(io.BytesIO(photo_bytes))
-                    c.drawImage(img, photo_x, photo_y, photo_w, photo_h,
-                                preserveAspectRatio=True, anchor='c')
+                    c.drawImage(
+                        img,
+                        photo_x,
+                        photo_y,
+                        photo_w,
+                        photo_h,
+                        preserveAspectRatio=True,
+                        anchor="c",
+                    )
                 except Exception as e:
                     logger.warning(f"[IDCards] Failed to load photo for {name}: {e}")
                     c.rect(photo_x, photo_y, photo_w, photo_h)
-                    c.drawCentredString(x + card_width/2, y + card_height/2, "Photo Error")
+                    c.drawCentredString(x + card_width / 2, y + card_height / 2, "Photo Error")
             else:
                 c.rect(photo_x, photo_y, photo_w, photo_h)
-                c.drawCentredString(x + card_width/2, y + card_height/2, "No Photo")
+                c.drawCentredString(x + card_width / 2, y + card_height / 2, "No Photo")
 
         # Footer for last card page
-        draw_page_footer(current_page)
+        draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
 
         # Summary page
         c.showPage()
         current_page += 1
-        draw_page_header()
+        draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}", landscape_mode=True)
         c.setFont("Helvetica-Bold", 16)
-        c.drawCentredString(page_width / 2, page_height / 2,
-                            f"Total ID Cards Generated: {len(rows)}")
-        draw_page_footer(current_page)
+        c.drawCentredString(page_width / 2, page_height / 2, f"Total ID Cards Generated: {len(rows)}")
+        draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
 
         c.save()
         pdf_bytes = buffer.getvalue()

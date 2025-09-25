@@ -1,18 +1,17 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from config.logger import logger, log_and_raise
-from config.envs import ADMIN_CHAT_ID
 from db.init import get_db
 from db.models import Boat, BoardingSession
 from datetime import datetime
+from bot.utils.roles import require_role
 
+
+@require_role("admin")
 async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start boarding session for a boat."""
     try:
         user_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != user_id:
-            await update.message.reply_text("⛔ You are not authorized to run this command.")
-            return
 
         if not context.args:
             await update.message.reply_text("Usage: /boatready <BoatNumber> <Capacity>")
@@ -58,13 +57,12 @@ async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Admin", "running /boatready", e)
 
+
+@require_role("admin")
 async def checkinmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Activate check-in mode for current boat session."""
     try:
         user_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != user_id:
-            await update.message.reply_text("⛔ You are not authorized to run this command.")
-            return
 
         with get_db() as db:
             session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
@@ -83,13 +81,12 @@ async def checkinmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Admin", "running /checkinmode", e)
 
+
+@require_role("admin")
 async def editseats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Edit seat count for a boat during boarding."""
     try:
         user_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != user_id:
-            await update.message.reply_text("⛔ You are not authorized to run this command.")
-            return
 
         if len(context.args) != 2:
             await update.message.reply_text("Usage: /editseats <BoatNumber> <NewCapacity>")

@@ -1,20 +1,17 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from config.logger import logger, log_and_raise
-from config.envs import ADMIN_CHAT_ID
 from db.init import get_db
 from db.models import User
+from bot.utils.roles import require_role
 
 VALID_ROLES = ["admin", "checkin_staff", "booking_staff"]
 
+
+@require_role("admin")
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Register a user with a role (admin-only)."""
     try:
-        caller_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != caller_id:
-            await update.message.reply_text("⛔ Only the admin can register users.")
-            return
-
         if len(context.args) != 2:
             await update.message.reply_text(
                 "Usage: /register <telegramid> <role>\n"
@@ -44,14 +41,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("UserAdmin", "registering user", e)
 
+
+@require_role("admin")
 async def unregister(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Unregister a user (admin-only)."""
     try:
-        caller_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != caller_id:
-            await update.message.reply_text("⛔ Only the admin can unregister users.")
-            return
-
         if not context.args or len(context.args) != 1:
             await update.message.reply_text("Usage: /unregister <telegramid>")
             return

@@ -1,19 +1,19 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from config.logger import logger, log_and_raise
-from config.envs import ADMIN_CHAT_ID, DRY_RUN
+from config.envs import DRY_RUN
 from db.init import get_db
 from db.models import Config
 from sheets.manager import create_event_tab
 from googleapiclient.errors import HttpError
+from bot.utils.roles import require_role
 
+
+@require_role("admin")
 async def cpe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Create Present Event — sets active event and creates tab in Sheets."""
     try:
         user_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != user_id:
-            await update.message.reply_text("⛔ You are not authorized to run this command.")
-            return
 
         if not context.args:
             await update.message.reply_text("Usage: /cpe <event_name>")
@@ -21,7 +21,9 @@ async def cpe(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         event_name = " ".join(context.args).strip()
         if not event_name or "/" in event_name or len(event_name) > 50:
-            await update.message.reply_text("❌ Invalid event name. Please choose a simpler name (no slashes, max 50 chars).")
+            await update.message.reply_text(
+                "❌ Invalid event name. Please choose a simpler name (no slashes, max 50 chars)."
+            )
             return
 
         logger.info(f"[Admin] Creating new event: {event_name}")
@@ -47,7 +49,7 @@ async def cpe(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
 
         await update.message.reply_text(f"✅ Active event set to: {event_name}")
-        logger.info(f"[Admin] Active event set to '{event_name}'")
+        logger.info(f"[Admin] Active event set to '{event_name}' by {user_id}")
 
     except Exception as e:
         log_and_raise("Admin", "running /cpe", e)

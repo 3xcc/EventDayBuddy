@@ -1,19 +1,21 @@
+import csv
+import io
+from utils.money import parse_amount
 from decimal import Decimal, InvalidOperation
 
 def parse_booking_input(update_text: str) -> dict:
     """
-    Parse free-form booking text into a structured dict.
-    Expected fields: name, id_number, phone, male_dep, resort_dep,
-                     paid_amount, transfer_ref, ticket_type,
-                     arrival_time, departure_time
+    Parse staff-formatted booking text into a structured dict.
+    Expected 8 lines:
+    Name, ID, Phone, Male' Dep, Resort Dep, Paid Amount, Transfer Ref, Ticket Type
     """
     lines = update_text.splitlines()
     lines = [l.strip() for l in lines if l.strip() and not l.strip().startswith("/newbooking")]
 
     cleaned = []
     for l in lines:
-        # Strip leading numbering like "1)" or "1."
-        if len(l) > 2 and l[:2].isdigit() and l[2] in [")", "."]:
+        # Strip leading numbering like "1)", "1.", or "1 -"
+        if len(l) > 2 and l[:2].isdigit() and l[2] in [")", ".", "-", "–"]:
             l = l[3:].strip()
         # Strip "Field: value" → "value"
         if ":" in l:
@@ -21,13 +23,14 @@ def parse_booking_input(update_text: str) -> dict:
             l = val.strip()
         cleaned.append(l)
 
-    # Map into dict
+    if len(cleaned) < 8:
+        raise ValueError(f"Expected 8 lines, got {len(cleaned)}")
+
     fields = [
         "name", "id_number", "phone", "male_dep", "resort_dep",
-        "paid_amount", "transfer_ref", "ticket_type",
-        "arrival_time", "departure_time"
+        "paid_amount", "transfer_ref", "ticket_type"
     ]
-    data = {field: cleaned[i] if i < len(cleaned) else None for i, field in enumerate(fields)}
+    data = {field: cleaned[i] for i, field in enumerate(fields)}
 
     # Normalize
     if data["id_number"]:
@@ -46,3 +49,38 @@ def parse_booking_input(update_text: str) -> dict:
         raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
     return data
+
+def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
+    """
+    Parse a CSV/XLS file into structured booking dicts.
+    Returns (valid_rows, errors).
+    """
+    valid_rows, errors = [], []
+    reader = csv.DictReader(io.StringIO(file_bytes.decode("utf-8-sig")))
+
+    # Validate headers
+    missing_headers = [h for h in BOOKING_SCHEMA.keys() if h not in reader.fieldnames]
+    if missing_headers:
+        raise ValueError(f"Missing required headers: {', '.join(missing_headers)}")
+
+    for idx, row in enumerate(reader, start=2):  # start=2 for header offset
+        booking = {}
+        row_errors = []
+        for header, spec in BOOKING_SCHEMA.items():
+            raw_val = (row.get(header) or "").strip()
+            if not raw_val and spec.get("required"):
+                row_errors.append(f"Row {idx}: Missing {header}")
+                continue
+            if raw_val and "normalize" in spec:
+                try:
+                    raw_val = spec["normalize"](raw_val)
+                except Exception as e:
+                    row_errors.append(f"Row {idx}: Invalid {header} ({e})")
+            booking[spec["field"]] = raw_val or None
+
+        if row_errors:
+            errors.extend(row_errors)
+        else:
+            valid_rows.append(booking)
+
+    return valid_rows, errors

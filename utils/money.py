@@ -4,6 +4,7 @@ import re
 # Common currency prefixes/symbols you might encounter
 CURRENCY_PREFIXES = ("rf", "mvr", "usd", "eur", "gbp", "$", "ރ")
 
+
 def parse_amount(value):
     """
     Accepts strings like 'RF1000', '$400', '1,200.50', '400', 400, '1.200,50'.

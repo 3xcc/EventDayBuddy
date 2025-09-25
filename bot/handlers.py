@@ -15,6 +15,7 @@ from bot.admin import cpe, boatready, checkinmode, editseats, register, unregist
 from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
 from bot.departure import departed
+from bot.editbooking import editbooking
 from utils.supabase_storage import fetch_signed_file
 from db.init import get_db
 from db.models import User, Config
@@ -45,8 +46,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• /newbooking — Add a booking\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
-                "• /transfer — Transfer ticket\n"
-                "• /newbookings — Bulk import\n"
                 "• /start — Show this help menu"
             )
         elif role in ["checkin_staff", "booking_staff"]:
@@ -144,6 +143,8 @@ async def init_bot():
         app.add_handler(CommandHandler("departed", departed))
         app.add_handler(CommandHandler("register", register))
         app.add_handler(CommandHandler("unregister", unregister))
+        app.add_handler(CommandHandler("editbooking", editbooking))
+
 
         # Register callbacks
         register_checkin_handlers(app)

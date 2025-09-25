@@ -8,16 +8,17 @@ from datetime import datetime
 from utils.pdf_generator import generate_manifest_pdf
 from utils.idcards import generate_idcards_pdf
 from utils.supabase_storage import upload_manifest, upload_idcard
+from sqlalchemy.exc import OperationalError
+from bot.utils.roles import require_role
+
+
 
 # ===== /departed Command =====
+@require_role("admin")
 async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mark boat as departed and export manifest + ID cards."""
+    """Mark boat as departed and export manifest + ID cards, with concurrency guard."""
     try:
         user_id = str(update.effective_user.id)
-        if str(ADMIN_CHAT_ID) != user_id:
-            await update.message.reply_text("⛔ You are not authorized to run this command.")
-            logger.warning(f"[Departure] Unauthorized /departed attempt by {user_id}")
-            return
 
         if not context.args:
             await update.message.reply_text(
@@ -35,20 +36,40 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         departure_time = datetime.utcnow()
 
         with get_db() as db:
-            # Update boat status
-            boat = db.query(Boat).filter(Boat.boat_number == boat_number).first()
+            try:
+                # Lock the boat row for update
+                boat = (
+                    db.query(Boat)
+                    .filter(Boat.boat_number == boat_number)
+                    .with_for_update(nowait=True)
+                    .first()
+                )
+            except OperationalError:
+                await update.message.reply_text(
+                    f"⚠️ Boat {boat_number} is already being processed by another admin."
+                )
+                logger.warning(f"[Departure] Concurrency conflict on Boat {boat_number}")
+                return
+
             if not boat:
                 await update.message.reply_text(f"❌ Boat {boat_number} not found.")
+                return
+
+            if boat.status == "departed":
+                await update.message.reply_text(f"⚠️ Boat {boat_number} has already been marked as departed.")
                 return
 
             boat.status = "departed"
             logger.info(f"[Departure] Boat {boat_number} status set to departed.")
 
             # End boarding session
-            session = db.query(BoardingSession).filter(
-                BoardingSession.boat_number == boat_number,
-                BoardingSession.is_active.is_(True)
-            ).first()
+            session = (
+                db.query(BoardingSession)
+                .filter(BoardingSession.boat_number == boat_number,
+                        BoardingSession.is_active.is_(True))
+                .with_for_update(nowait=True)
+                .first()
+            )
             if session:
                 session.is_active = False
                 session.ended_at = departure_time

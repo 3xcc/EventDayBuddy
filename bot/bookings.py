@@ -8,9 +8,12 @@ from sheets.manager import append_to_master, append_to_event, update_booking_pho
 from utils.money import parse_amount
 from utils.booking_parser import parse_booking_input
 from utils.photo import handle_photo_upload
+from utils.booking_schema import build_master_row
 from services.booking_service import create_booking
+from bot.utils.roles import require_role
 
 # ===== /newbooking Command =====
+@require_role("booking_staff")
 async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Create a new booking and append to DB + Sheets."""
     try:
@@ -36,8 +39,8 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             paid_amount_raw = parsed["paid_amount"]
             transfer_ref = parsed["transfer_ref"]
             ticket_type = parsed["ticket_type"]
-            arrival_time = parsed["arrival_time"]
-            departure_time = parsed["departure_time"]
+            arrival_time = parsed.get("arrival_time")
+            departure_time = parsed.get("departure_time")
 
             if not name or not id_number or not phone:
                 await update.message.reply_text(
@@ -65,7 +68,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not active_event_cfg or not active_event_cfg.value:
                 await update.message.reply_text("⛔ No active event set. Use /cpe first.")
                 return
-            event_name = active_event_cfg.value
+            event_name = active_event_cfg.value.strip()
 
             booking = create_booking(
                 db=db,
@@ -84,30 +87,29 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             ticket_ref = booking.ticket_ref
 
-            # Prepare row for Sheets (must match MASTER_HEADERS order)
-            booking_row = [
-                "",  # No
-                event_name,
-                ticket_ref,
-                name,
-                id_number,
-                phone,
-                male_dep or "",
-                resort_dep or "",
-                str(paid_amount) if paid_amount is not None else "",
-                transfer_ref or "",
-                ticket_type or "",
-                "",  # Check in Time
-                "booked",  # Status
-                id_doc_url or "",
-                arrival_time or "",
-                departure_time or "",
-                "",  # ArrivalBoatBoarded
-                "",  # DepartureBoatBoarded
-            ]
+            # Build Master row using schema utility
+            booking_dict = {
+                "ticket_ref": ticket_ref,
+                "name": name,
+                "id_number": id_number,
+                "phone": phone,
+                "male_dep": male_dep,
+                "resort_dep": resort_dep,
+                "arrival_time": arrival_time,
+                "departure_time": departure_time,
+                "paid_amount": paid_amount,
+                "transfer_ref": transfer_ref,
+                "ticket_type": ticket_type,
+                "status": "booked",
+                "id_doc_url": id_doc_url,
+                "group_id": getattr(booking, "group_id", ""),
+                "created_at": getattr(booking, "created_at", None),
+            }
+            master_row = build_master_row(booking_dict, event_name)
+
             if not DRY_RUN:
-                append_to_master(event_name, booking_row)
-                append_to_event(event_name, booking_row)
+                append_to_master(event_name, master_row)
+                append_to_event(event_name, master_row)  # let booking_io build event row
 
         # Confirmation message + inline button
         msg_lines = [
@@ -132,7 +134,9 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Booking", "creating new booking", e)
 
+
 # ===== Callback for Attach Photo =====
+@require_role("checkin_staff")
 async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -140,7 +144,9 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data["awaiting_photo_for_booking"] = booking_id
     await query.message.reply_text("📷 Please send the ID photo now, and I’ll attach it to the booking.")
 
+
 # ===== Photo Handler =====
+@require_role("checkin_staff")
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     booking_id = context.user_data.get("awaiting_photo_for_booking")
     if not booking_id:
@@ -151,15 +157,21 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         if not booking:
             return
 
-        # Use ticket_ref for Supabase path
+        # Upload photo to Supabase
         file_url = await handle_photo_upload(update, booking.ticket_ref)
         if file_url:
             booking.id_doc_url = file_url
             db.commit()
             db.refresh(booking)
+
             if not DRY_RUN:
+                # Update only the photo column in both tabs
                 update_booking_photo(booking.event_name, booking.ticket_ref, file_url)
-            await update.message.reply_text(f"✅ Photo attached to {booking.name} ({booking.ticket_ref})")
+
+            await update.message.reply_text(
+                f"✅ Photo attached to {booking.name} ({booking.ticket_ref})"
+            )
             logger.info(f"[Booking] Photo attached for {booking.name} ({booking.ticket_ref})")
 
+    # Clear state
     context.user_data.pop("awaiting_photo_for_booking", None)

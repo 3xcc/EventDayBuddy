@@ -36,10 +36,15 @@ def init_db():
 def get_db():
     """
     Provide a transactional scope around a series of operations.
-    Ensures the session is closed after use.
+    Ensures commit on success, rollback on failure, and session close.
     """
     db = SessionLocal()
     try:
         yield db
+        db.commit()        # ✅ commit if no exception
+    except Exception as e:
+        db.rollback()      # ✅ rollback on error
+        logger.error(f"[DB] ❌ Transaction rolled back due to error: {e}", exc_info=True)
+        raise
     finally:
         db.close()

@@ -1,4 +1,5 @@
 import os
+import sys
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,12 +11,18 @@ from telegram import Update
 # Render sets PORT automatically; default to 8000 for local dev
 PORT = int(os.getenv("PORT", 8000))
 
+# Allow all origins in dev, restrict in prod
+ALLOWED_ORIGINS = (
+    ["*"] if os.getenv("ENV", "dev") == "dev"
+    else os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+)
+
 app = FastAPI(title="EventDayBuddy API", version="1.0.0")
 
 # ===== Middleware =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust for stricter security in production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,8 +34,11 @@ async def startup_event():
     logger.info("[Web] FastAPI startup — initializing bot...")
     try:
         await init_bot()
+        logger.info("[Startup] Bot initialized successfully.")
     except Exception as e:
         logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
+        # Fail fast: exit so orchestrator restarts the process
+        sys.exit(1)
 
 # ===== Routes =====
 @app.get("/", tags=["Health"])

@@ -11,6 +11,7 @@ from sheets.manager import update_booking_in_sheets
 from utils.supabase_storage import fetch_signed_file  # ✅ added import
 
 # ===== Lookup and prompt =====
+@require_role("checkin_staff")
 async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(
@@ -21,6 +22,7 @@ async def checkin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await handle_checkin(update, context, method="id")
 
+@require_role("checkin_staff")
 async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(
@@ -31,6 +33,7 @@ async def checkin_by_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await handle_checkin(update, context, method="phone")
 
+@require_role("checkin_staff")
 async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, method: str):
     try:
         user_id = str(update.effective_user.id)
@@ -98,6 +101,7 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
         log_and_raise("Checkin", f"handling /{method}", e)
 
 # ===== Confirm boarding callback =====
+@require_role("checkin_staff")
 async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         query = update.callback_query
@@ -155,5 +159,6 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_and_raise("Checkin", "confirming boarding", e)
 
 # ===== Handler registration =====
+@require_role("checkin_staff")
 def register_checkin_handlers(app):
     app.add_handler(CallbackQueryHandler(confirm_boarding, pattern=r"^confirm:(arrival|departure):\d+$"))
