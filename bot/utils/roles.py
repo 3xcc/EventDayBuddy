@@ -24,7 +24,7 @@ def require_role(required_role: str):
 
             # Look up user in DB
             with get_db() as db:
-                user = db.query(User).filter(User.telegram_id == user_id).first()
+                user = db.query(User).filter(User.chat_id == user_id).first()
 
             if not user:
                 await update.message.reply_text("⛔ You are not registered in the system.")
