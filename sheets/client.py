@@ -24,3 +24,7 @@ def get_service():
         return _service
     except Exception as e:
         log_and_raise("Sheets Init", "initializing Google Sheets API client", e)
+
+# Backward-compatible export
+service = get_service()
+
