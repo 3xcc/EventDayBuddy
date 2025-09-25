@@ -26,9 +26,6 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
         title = f"Boat {boat_number} Manifest"
         subtitle = f"{event_name or 'Event'} — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
 
-        # First page header
-        draw_header(c, title, subtitle)
-
         def draw_headers(y):
             c.setFont("Helvetica-Bold", 10)
             c.drawString(50, y, "No.")
@@ -38,6 +35,8 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
             c.drawString(480, y, "Boarded Boat")
             c.setFont("Helvetica", 10)
 
+        # --- First page setup ---
+        draw_header(c, title, subtitle)
         y = page_height - 100
         draw_headers(y)
         y -= 20
@@ -59,13 +58,15 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
 
             y -= 18
             if y < 70:  # new page
-                draw_footer(c, current_page)
+                draw_footer(c, current_page)  # show "Page X"
                 c.showPage()
                 current_page += 1
                 draw_header(c, title, subtitle)
                 y = page_height - 100
                 draw_headers(y)
                 y -= 20
+
+        total_pages = current_page
 
         # Summary footer
         c.setFont("Helvetica-Bold", 12)
@@ -76,8 +77,8 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
             c.setFont("Helvetica-Bold", 20)
             c.drawCentredString(page_width / 2, page_height / 2, "NO PASSENGERS")
 
-        # Final footer
-        draw_footer(c, current_page)
+        # Final footer with total pages
+        draw_footer(c, current_page, total_pages)
 
         c.save()
         buffer.seek(0)
