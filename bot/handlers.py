@@ -16,6 +16,7 @@ from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
 from bot.departure import departed
 from bot.editbooking import editbooking
+from bot import bookings_bulk
 from utils.supabase_storage import fetch_signed_file
 from db.init import get_db
 from db.models import User, Config
@@ -43,7 +44,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• /checkinmode — Enable check-in mode\n"
                 "• /editseats — Adjust boat capacity\n"
                 "• /departed — Mark boat departed\n"
-                "• /newbooking — Add a booking\n"
+                "• /newbooking — Add a single booking\n"
+                "• /newbookings — Bulk import bookings from CSV/XLS\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
                 "• /start — Show this help menu"
@@ -52,7 +54,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             help_text = (
                 "👋 Welcome, Event Staff!\n\n"
                 "Here are your available commands:\n"
-                "• /newbooking — Add a booking\n"
+                "• /newbooking — Add a single booking\n"
+                "• /newbookings — Bulk import bookings from CSV/XLS\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
                 "• /start — Show this help menu"
@@ -144,6 +147,10 @@ async def init_bot():
         app.add_handler(CommandHandler("register", register))
         app.add_handler(CommandHandler("unregister", unregister))
         app.add_handler(CommandHandler("editbooking", editbooking))
+
+        # ✅ Register bulk booking handlers
+        bookings_bulk.register_handlers(app)
+
 
 
         # Register callbacks

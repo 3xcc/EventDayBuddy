@@ -17,6 +17,24 @@ from bot.utils.roles import require_role
 async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Create a new booking and append to DB + Sheets."""
     try:
+        if (not context.args) and (not update.message.text or update.message.text.strip() == "/newbooking"):
+            await update.message.reply_text(
+                "📝 To create a booking, please provide details in one of these formats:\n\n"
+                "Option 1: Multi‑line (8 lines)\n"
+                "1. Name\n"
+                "2. ID Number\n"
+                "3. Phone\n"
+                "4. Male Departure\n"
+                "5. Resort Departure\n"
+                "6. Paid Amount\n"
+                "7. Transfer Ref\n"
+                "8. Ticket Type\n"
+                "(Arrival/Departure times optional)\n\n"
+                "Option 2: Single line with arguments:\n"
+                "`/newbooking JohnDoe ID123 987654321 Male Resort 400 REF123 VIP`\n\n"
+                "👉 Send again with the details in one of these formats."
+            )
+            return   
         # Parse args or multi-line input
         if len(context.args) >= 5:
             name = context.args[0]
