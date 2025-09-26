@@ -128,7 +128,6 @@ async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_
 
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
-    """Initialize the Telegram bot application and set webhook."""
     global application
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
@@ -148,28 +147,34 @@ async def init_bot():
         app.add_handler(CommandHandler("unregister", unregister))
         app.add_handler(CommandHandler("editbooking", editbooking))
 
-        # ✅ Register bulk booking handlers
+        # Bulk booking handlers
         bookings_bulk.register_handlers(app)
 
-
-
-        # Register callbacks
+        # Callbacks
         register_checkin_handlers(app)
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
-        # Build webhook URL safely
+        # Initialize before setting webhook
+        await app.initialize()
+
+        # Build webhook URL
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         if not webhook_url.startswith("https://"):
             logger.warning("[Bot] PUBLIC_URL is not HTTPS — Telegram will reject webhook")
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
         await app.bot.set_webhook(webhook_url)
 
-        # Start the bot so update_queue is active
-        await app.initialize()
+        # Start consuming updates from webhook
         await app.start()
+        await app.updater.start_webhook(
+            listen="0.0.0.0",
+            port=int(os.getenv("PORT", 8000)),
+            url_path=TELEGRAM_TOKEN,
+            webhook_url=webhook_url,
+        )
 
         application = app
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
