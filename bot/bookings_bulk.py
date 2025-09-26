@@ -9,7 +9,9 @@ from services import import_service
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
-@require_role(["admin"])
+
+# ✅ Pass a string, not a list
+@require_role("admin")
 async def newbookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle /newbookings command with attached CSV/XLS file.
@@ -17,8 +19,8 @@ async def newbookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     try:
         message = update.message
-        if not message.document:
-            await message.reply_text("⚠️ Please attach a CSV/XLS file with the bookings.")
+        if not message or not message.document:
+            await update.message.reply_text("⚠️ Please attach a CSV/XLS file with the bookings.")
             return
 
         # Validate file type
@@ -65,7 +67,9 @@ def register_handlers(application):
     Register /newbookings handler with the bot application.
     """
     application.add_handler(CommandHandler("newbookings", newbookings))
-    application.add_handler(MessageHandler(
-        filters.Document.ALL & filters.CaptionRegex(r"^/newbookings"),
-        newbookings
-    ))
+    application.add_handler(
+        MessageHandler(
+            filters.Document.ALL & filters.CaptionRegex(r"^/newbookings"),
+            newbookings
+        )
+    )
