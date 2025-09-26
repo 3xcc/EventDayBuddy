@@ -9,7 +9,7 @@ from services import import_service
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
-@require_role(["admin", "booking_staff"])
+@require_role(["admin"])
 async def newbookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle /newbookings command with attached CSV/XLS file.
