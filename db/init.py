@@ -1,5 +1,5 @@
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text   # ✅ import text
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from config.logger import logger, log_and_raise
@@ -20,9 +20,9 @@ def init_engine_with_retry(url: str, retries: int = 5, backoff: int = 2):
                 pool_pre_ping=True, # validate connections before using
                 echo=(LOG_LEVEL == "DEBUG"),
             )
-            # test connection immediately
+            # ✅ test connection immediately using SQLAlchemy 2.0 style
             with engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             logger.info("[DB] ✅ Connected to database.")
             return engine
         except Exception as e:
