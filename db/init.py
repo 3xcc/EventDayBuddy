@@ -14,12 +14,13 @@ def init_engine_with_retry(url: str, retries: int = 5, backoff: int = 2):
     while True:
         try:
             engine = create_engine(
-                url,
-                pool_size=5,        # keep under Supabase free-tier pooler cap
-                max_overflow=0,     # don’t burst beyond pool_size
-                pool_pre_ping=True, # validate connections before using
+                DB_URL,
+                connect_args={"application_name": "eventdaybuddy-api"},
+                pool_size=5,
+                max_overflow=0,
+                pool_pre_ping=True,
                 echo=(LOG_LEVEL == "DEBUG"),
-            )
+)
             # ✅ test connection immediately using SQLAlchemy 2.0 style
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
