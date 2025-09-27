@@ -1,5 +1,4 @@
 import asyncio
-import os
 from io import BytesIO
 from telegram import Update
 from telegram.ext import (
@@ -168,14 +167,8 @@ async def init_bot():
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
         await app.bot.set_webhook(webhook_url)
 
-        # Start consuming updates from webhook
+        # Start dispatcher (so update_queue is active)
         await app.start()
-        await app.updater.start_webhook(
-            listen="0.0.0.0",
-            port=int(os.getenv("PORT", 8000)),
-            url_path=TELEGRAM_TOKEN,
-            webhook_url=webhook_url,
-        )
 
         application = app
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
