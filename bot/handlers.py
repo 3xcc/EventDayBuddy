@@ -198,7 +198,9 @@ async def init_bot():
         if not webhook_url.startswith("https://"):
             logger.warning("[Bot] PUBLIC_URL is not HTTPS — Telegram will reject webhook")
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
-        await app.bot.set_webhook(webhook_url)
+        await app.bot.set_webhook(webhook_url, drop_pending_updates=True)
+        logger.info("[Bot] Webhook set successfully")
+
 
         # Start dispatcher (so update_queue is active)
         await app.start()
