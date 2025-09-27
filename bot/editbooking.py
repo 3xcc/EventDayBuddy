@@ -1,3 +1,14 @@
+
+# Handler for the "Replace Photo" button
+@require_role("booking_staff")
+async def replace_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    booking_id = int(query.data.split(":")[1])
+    context.user_data["awaiting_photo_for_booking"] = booking_id
+    await query.message.reply_text("📷 Please send the new ID photo now, and I’ll replace the old one for this booking.")
+
+
 from telegram import Update
 from telegram.ext import ContextTypes
 from config.logger import logger, log_and_raise
