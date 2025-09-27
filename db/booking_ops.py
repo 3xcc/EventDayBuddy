@@ -73,7 +73,7 @@ def _resolve_event_id(db, event_name: str) -> int:
     Resolve or create an Event ID from event_name.
     Defaults to 'General' if not provided.
     """
-        name = event_name or "Master"
+    name = event_name or "Master"
     event = db.query(Event).filter(Event.name == name).first()
     if not event:
         event = Event(name=name)
