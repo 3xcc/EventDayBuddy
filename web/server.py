@@ -37,8 +37,21 @@ async def startup_event():
         logger.info("[Startup] Bot initialized successfully.")
     except Exception as e:
         logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
-        # Fail fast: exit so orchestrator restarts the process
         sys.exit(1)
+
+# ===== Shutdown Hook =====
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("[Web] FastAPI shutdown — cleaning up bot...")
+    try:
+        from bot.handlers import application
+        if application:
+            await application.shutdown()
+            await application.stop()
+            logger.info("[Shutdown] Bot application shut down cleanly.")
+    except Exception as e:
+        logger.error(f"[Shutdown] Bot shutdown failed: {e}", exc_info=True)
+
 
 # ===== Routes =====
 @app.get("/", tags=["Health"])

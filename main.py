@@ -26,6 +26,5 @@ def main():
 
     except Exception as e:
         log_and_raise("Main", "starting EventDayBuddy web service", e)
-
-if __name__ == "__main__":
-    main()
+    finally:
+        logger.info("🛑 EventDayBuddy has stopped.")

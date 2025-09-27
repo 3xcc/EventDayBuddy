@@ -50,6 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
+                "• /sleeptime — Gracefully shut down the bot\n"
                 "• /start — Show this help menu\n\n"
                 "Staff can be assigned roles: admin, booking_staff, checkin_staff."
             )
@@ -132,6 +133,31 @@ async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_
         await update.callback_query.message.reply_text("❌ Failed to fetch ID cards PDF.")
         log_and_raise("Callback", f"handling exportidcards for boat {boat_number}", e)
 
+# ===== Sleeptime Command =====
+async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gracefully shut down the bot when commanded by an admin."""
+    try:
+        user_id = str(update.effective_user.id)
+        with get_db() as db:
+            user = db.query(User).filter(User.chat_id == user_id).first()
+            role = user.role if user else "viewer"
+
+        if role != "admin":
+            await update.message.reply_text("❌ Only admins can put the bot to sleep.")
+            return
+
+        await update.message.reply_text("😴 Going to sleep now... shutting down gracefully.")
+        logger.info(f"[Bot] /sleeptime triggered by admin {user_id}")
+
+        if application:
+            await application.shutdown()
+            await application.stop()
+            logger.info("[Bot] Application stopped via /sleeptime")
+
+    except Exception as e:
+        log_and_raise("Bot", "handling /sleeptime command", e)
+
+
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
     global application
@@ -152,6 +178,7 @@ async def init_bot():
         app.add_handler(CommandHandler("register", register))
         app.add_handler(CommandHandler("unregister", unregister))
         app.add_handler(CommandHandler("editbooking", editbooking))
+        app.add_handler(CommandHandler("sleeptime", sleeptime))
 
         # Bulk booking handlers
         bookings_bulk.register_handlers(app)
