@@ -1,6 +1,8 @@
 import csv, io, logging
 from utils.money import parse_amount
 from decimal import Decimal, InvalidOperation
+from utils.booking_schema import MASTER_HEADERS, EVENT_HEADERS
+
 
 def parse_booking_input(update_text: str) -> dict:
     """
@@ -52,11 +54,12 @@ def parse_booking_input(update_text: str) -> dict:
 def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
     """
     Parse a CSV/XLS file into structured booking dicts.
+    Supports both Master and Event tab formats.
     Returns (valid_rows, errors).
     """
     valid_rows, errors = [], []
 
-    # Try decoding with common encodings
+    # --- Decode with fallback encodings ---
     text = None
     for enc in ("utf-8-sig", "utf-16", "latin1"):
         try:
@@ -69,26 +72,60 @@ def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
         raise ValueError("Unsupported file encoding")
 
     reader = csv.DictReader(io.StringIO(text))
+    headers = [h.strip() for h in reader.fieldnames or []]
 
-    # Validate headers
-    missing_headers = [h for h in BOOKING_SCHEMA.keys() if h not in reader.fieldnames]
-    if missing_headers:
-        raise ValueError(f"Missing required headers: {', '.join(missing_headers)}")
+    # --- Detect schema ---
+    is_master = "Event" in headers and "TicketRef" in headers
+    is_event = "T. Reference" in headers and "ID" in headers
 
-    for idx, row in enumerate(reader, start=2):  # start=2 for header offset
-        booking = {}
-        row_errors = []
-        for header, spec in BOOKING_SCHEMA.items():
-            raw_val = (row.get(header) or "").strip()
-            if not raw_val and spec.get("required"):
-                row_errors.append(f"Row {idx}: Missing {header}")
-                continue
-            if raw_val and "normalize" in spec:
-                try:
-                    raw_val = spec["normalize"](raw_val)
-                except Exception as e:
-                    row_errors.append(f"Row {idx}: Invalid {header} ({e})")
-            booking[spec["field"]] = raw_val or None
+    if not (is_master or is_event):
+        raise ValueError("Unrecognized file format: headers do not match Master or Event schema")
+
+    # --- Row parsing ---
+    for idx, row in enumerate(reader, start=2):
+        booking, row_errors = {}, []
+
+        if is_master:
+            # Map Master headers
+            booking = {
+                "ticket_ref": row.get("TicketRef", "").strip(),
+                "name": row.get("Name", "").strip(),
+                "id_number": row.get("IDNumber", "").strip(),
+                "phone": row.get("Phone", "").strip(),
+                "male_dep": row.get("MaleDep", "").strip(),
+                "resort_dep": row.get("ResortDep", "").strip(),
+                "arrival_time": row.get("ArrivalTime", "").strip(),
+                "departure_time": row.get("DepartureTime", "").strip(),
+                "paid_amount": row.get("PaidAmount", "").strip(),
+                "transfer_ref": row.get("TransferRef", "").strip(),
+                "ticket_type": row.get("TicketType", "").strip(),
+                "status": row.get("Status", "").strip() or "booked",
+                "id_doc_url": row.get("ID Doc URL", "").strip(),
+                "group_id": row.get("GroupID", "").strip(),
+            }
+
+        elif is_event:
+            # Map Event headers
+            booking = {
+                "ticket_ref": row.get("T. Reference", "").strip(),
+                "name": row.get("Name", "").strip(),
+                "id_number": row.get("ID", "").strip(),
+                "phone": row.get("Number", "").strip(),
+                "male_dep": row.get("Male' Dep", "").strip(),
+                "resort_dep": row.get("Resort Dep", "").strip(),
+                "arrival_time": row.get("ArrivalTime", "").strip(),
+                "departure_time": row.get("DepartureTime", "").strip(),
+                "paid_amount": row.get("Paid Amount", "").strip(),
+                "transfer_ref": row.get("Transfer slip Ref", "").strip(),
+                "ticket_type": row.get("Ticket Type", "").strip(),
+                "status": row.get("Status", "").strip() or "booked",
+                "id_doc_url": row.get("ID Doc URL", "").strip(),
+                "group_id": "",  # Event tab doesn’t have this
+            }
+
+        # --- Validation ---
+        if not booking["ticket_ref"] or not booking["name"]:
+            row_errors.append(f"Row {idx}: Missing TicketRef or Name")
 
         if row_errors:
             errors.extend(row_errors)
