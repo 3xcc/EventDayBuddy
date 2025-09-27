@@ -160,8 +160,8 @@ def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
             }
 
         # --- Validation ---
-        if not booking["ticket_ref"] or not booking["name"]:
-            row_errors.append(f"Row {idx}: Missing TicketRef or Name")
+        if not booking["name"] or not booking["id_number"]:
+            row_errors.append(f"Row {idx}: Missing Name or IDNumber")
 
         if row_errors:
             errors.extend(row_errors)
