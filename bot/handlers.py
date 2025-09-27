@@ -38,27 +38,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if role == "admin":
             help_text = (
                 "👋 Welcome, Admin!\n\n"
-                "Here are your available commands:\n"
-                "• /cpe — Set active event\n"
+                "You have full access. Here are your available commands:\n"
+                "• /cpe — Set or view the active event\n"
                 "• /boatready — Start boarding session\n"
                 "• /checkinmode — Enable check-in mode\n"
                 "• /editseats — Adjust boat capacity\n"
                 "• /departed — Mark boat departed\n"
-                "• /newbooking — Add a single booking\n"
-                "• /newbookings — Bulk import bookings from CSV/XLS\n"
+                "• /newbooking — Add a single booking (with optional ID photo)\n"
+                "• /newbookings [EventName] — Bulk import bookings from CSV/XLS (attach file)\n"
+                "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
-                "• /start — Show this help menu"
+                "• /start — Show this help menu\n\n"
+                "Staff can be assigned roles: admin, booking_staff, checkin_staff."
             )
         elif role in ["checkin_staff", "booking_staff"]:
             help_text = (
                 "👋 Welcome, Event Staff!\n\n"
                 "Here are your available commands:\n"
-                "• /newbooking — Add a single booking\n"
-                "• /newbookings — Bulk import bookings from CSV/XLS\n"
+                "• /newbooking — Add a single booking (with optional ID photo)\n"
+                "• /newbookings [EventName] — Bulk import bookings from CSV/XLS (attach file)\n"
+                "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
-                "• /start — Show this help menu"
+                "• /start — Show this help menu\n\n"
+                "To attach a photo, use the '📷 Attach ID Photo' button after creating a booking, then send the photo."
             )
         else:
             help_text = (
