@@ -7,6 +7,7 @@ from bot.utils.roles import require_role
 from services import import_service
 from db.init import get_db
 from db.models import Config
+from sheets.manager import ensure_event_tab
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
@@ -63,6 +64,12 @@ async def newbookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     event_name = "Master"
 
         logger.info(f"[Bot] /newbookings triggered by {update.effective_user.id} for event '{event_name}'")
+
+        # Ensure event tab exists
+        ensure_event_tab(event_name)
+
+        # Ensure event tab exists in Sheets before import
+        ensure_event_tab(event_name)
 
         # Run import pipeline
         result = import_service.run_bulk_import(

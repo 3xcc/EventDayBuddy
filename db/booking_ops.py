@@ -17,9 +17,9 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str) -> List[int]:
             for row in rows:
                 # Always generate ticket_ref if not present or empty
                 ticket_ref = row.get("ticket_ref")
-                if not ticket_ref:
-                    event_name = row.get("event_name") or "General"
-                    ticket_ref = generate_ticket_ref(event_name)
+                    if not ticket_ref:
+                        event_name = row.get("event_name") or "Master"
+                        ticket_ref = generate_ticket_ref(event_name)
                 booking = Booking(
                     event_id=_resolve_event_id(db, row.get("event_name")),
                     ticket_ref=ticket_ref,
@@ -73,7 +73,7 @@ def _resolve_event_id(db, event_name: str) -> int:
     Resolve or create an Event ID from event_name.
     Defaults to 'General' if not provided.
     """
-    name = event_name or "General"
+        name = event_name or "Master"
     event = db.query(Event).filter(Event.name == name).first()
     if not event:
         event = Event(name=name)
