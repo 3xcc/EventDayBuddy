@@ -127,14 +127,16 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             # Update booking
+            now = datetime.utcnow()
             if leg == "arrival":
                 booking.arrival_boat_boarded = session.boat_number
+                booking.arrival_time = now
             elif leg == "departure":
                 booking.departure_boat_boarded = session.boat_number
+                booking.departure_time = now
 
             booking.status = "checked-in"
-            booking.checkin_time = datetime.utcnow()
-
+            booking.checkin_time = now
             # Log check-in
             checkin_log = CheckinLog(
                 booking_id=booking.id,
