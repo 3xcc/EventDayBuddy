@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
 from config.logger import logger
 from bot.utils.roles import require_role
 from services import import_service
+from db.init import get_db
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
