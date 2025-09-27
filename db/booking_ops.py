@@ -17,9 +17,9 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str) -> List[int]:
             for row in rows:
                 # Always generate ticket_ref if not present or empty
                 ticket_ref = row.get("ticket_ref")
-                    if not ticket_ref:
-                        event_name = row.get("event_name") or "Master"
-                        ticket_ref = generate_ticket_ref(event_name)
+                if not ticket_ref:
+                    event_name = row.get("event_name") or "Master"
+                    ticket_ref = generate_ticket_ref(event_name)
                 booking = Booking(
                     event_id=_resolve_event_id(db, row.get("event_name")),
                     ticket_ref=ticket_ref,
