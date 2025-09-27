@@ -156,6 +156,15 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== Callback for Attach Photo =====
 @require_role(["booking_staff", "checkin_staff"])
 async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # If called as a command (not a callback), show help
+    if update.message:
+        await update.message.reply_text(
+            "📝 To attach an ID photo to a booking, first use the '📷 Attach ID Photo' button on a booking confirmation.\n"
+            "Then, send the photo in reply.\n\n"
+            "This command is only needed if you are responding to a booking's photo request."
+        )
+        return
+    # CallbackQuery flow
     query = update.callback_query
     await query.answer()
     booking_id = int(query.data.split(":")[1])
