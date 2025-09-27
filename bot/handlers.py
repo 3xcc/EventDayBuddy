@@ -161,8 +161,10 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
     global application
+    import traceback
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
+        print("[DEBUG] Building Application...")
         app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
         # Register commands
@@ -190,23 +192,31 @@ async def init_bot():
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
-        # Initialize before setting webhook
+        print("[DEBUG] Awaiting app.initialize()...")
         await app.initialize()
+        print("[DEBUG] app.initialize() complete.")
 
         # Build webhook URL
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+        print(f"[DEBUG] Webhook URL: {webhook_url}")
         if not webhook_url.startswith("https://"):
             logger.warning("[Bot] PUBLIC_URL is not HTTPS — Telegram will reject webhook")
         logger.info(f"[Bot] Setting webhook to {webhook_url}")
+        print("[DEBUG] Awaiting app.bot.set_webhook()...")
         await app.bot.set_webhook(webhook_url, drop_pending_updates=True)
+        print("[DEBUG] app.bot.set_webhook() complete.")
         logger.info("[Bot] Webhook set successfully")
 
-
         # Start dispatcher (so update_queue is active)
+        print("[DEBUG] Awaiting app.start()...")
         await app.start()
+        print("[DEBUG] app.start() complete.")
 
         application = app
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
+        print("[DEBUG] Bot application fully initialized.")
 
     except Exception as e:
+        print("[DEBUG] Exception in init_bot:", e)
+        traceback.print_exc()
         log_and_raise("Bot Init", "initializing Telegram bot", e)

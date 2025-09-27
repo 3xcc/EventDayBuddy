@@ -32,11 +32,16 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     logger.info("[Web] FastAPI startup — initializing bot...")
+    import traceback
     try:
+        print("[DEBUG] Calling init_bot()...")
         await init_bot()
         logger.info("[Startup] Bot initialized successfully.")
+        print("[DEBUG] init_bot() completed successfully.")
     except Exception as e:
         logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
+        print("[DEBUG] Exception in startup_event:", e)
+        traceback.print_exc()
         sys.exit(1)
 
 # ===== Shutdown Hook =====
