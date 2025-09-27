@@ -1,14 +1,3 @@
-
-# Handler for the "Replace Photo" button
-@require_role("booking_staff")
-async def replace_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    booking_id = int(query.data.split(":")[1])
-    context.user_data["awaiting_photo_for_booking"] = booking_id
-    await query.message.reply_text("📷 Please send the new ID photo now, and I’ll replace the old one for this booking.")
-
-
 from telegram import Update
 from telegram.ext import ContextTypes
 from config.logger import logger, log_and_raise
@@ -17,6 +6,7 @@ from db.models import Booking, BookingEditLog
 from sheets.manager import update_booking_row
 from utils.booking_schema import build_master_row, build_event_row
 from bot.utils.roles import require_role
+
 
 # Map user-friendly field names to DB attributes
 FIELD_ALIASES = {
@@ -187,3 +177,12 @@ async def editbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         log_and_raise("Booking", "editing booking", e)
+
+# Handler for the "Replace Photo" button
+@require_role("booking_staff")
+async def replace_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    booking_id = int(query.data.split(":")[1])
+    context.user_data["awaiting_photo_for_booking"] = booking_id
+    await query.message.reply_text("📷 Please send the new ID photo now, and I’ll replace the old one for this booking.")
