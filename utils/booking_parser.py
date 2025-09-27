@@ -1,7 +1,24 @@
 import csv, io, logging
-from utils.money import parse_amount
 from decimal import Decimal, InvalidOperation
 from utils.booking_schema import MASTER_HEADERS, EVENT_HEADERS
+
+
+def _normalize_amount(value: str):
+    """Convert amount strings like '1,200.00' or 'MVR 1200' into Decimal if possible."""
+    if not value:
+        return None
+    try:
+        cleaned = value.replace(",", "").replace("$", "").replace("MVR", "").strip()
+        return Decimal(cleaned)
+    except (InvalidOperation, AttributeError):
+        return value  # leave as-is if not parseable
+
+
+def _normalize_phone(value: str):
+    """Keep only digits and leading +."""
+    if not value:
+        return None
+    return "".join(ch for ch in value if ch.isdigit() or ch == "+")
 
 
 def parse_booking_input(update_text: str) -> dict:
@@ -37,7 +54,7 @@ def parse_booking_input(update_text: str) -> dict:
     if data["id_number"]:
         data["id_number"] = data["id_number"].strip().upper()
     if data["phone"]:
-        data["phone"] = "".join(ch for ch in data["phone"] if ch.isdigit() or ch == "+")
+        data["phone"] = _normalize_phone(data["phone"])
     if data["paid_amount"]:
         try:
             data["paid_amount"] = Decimal(data["paid_amount"].replace(",", "").replace("$", ""))
@@ -51,10 +68,11 @@ def parse_booking_input(update_text: str) -> dict:
 
     return data
 
+
 def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
     """
-    Parse a CSV/XLS file into structured booking dicts.
-    Supports both Master and Event tab formats.
+    Parse a CSV file into structured booking dicts.
+    Supports Master tab, Event tab, and raw snake_case CSV formats.
     Returns (valid_rows, errors).
     """
     valid_rows, errors = [], []
@@ -71,56 +89,74 @@ def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
     if text is None:
         raise ValueError("Unsupported file encoding")
 
-    reader = csv.DictReader(io.StringIO(text))
-    headers = [h.strip() for h in reader.fieldnames or []]
+    # Important: newline="" prevents _csv.Error on embedded newlines
+    reader = csv.DictReader(io.StringIO(text, newline=""))
+    headers = [h.strip() for h in (reader.fieldnames or [])]
 
     # --- Detect schema ---
     is_master = "Event" in headers and "TicketRef" in headers
     is_event = "T. Reference" in headers and "ID" in headers
+    is_raw   = "ticket_ref" in headers and "id_number" in headers
 
-    if not (is_master or is_event):
-        raise ValueError("Unrecognized file format: headers do not match Master or Event schema")
+    if not (is_master or is_event or is_raw):
+        raise ValueError("Unrecognized file format: headers do not match Master, Event, or Raw schema")
 
     # --- Row parsing ---
     for idx, row in enumerate(reader, start=2):
         booking, row_errors = {}, []
 
         if is_master:
-            # Map Master headers
             booking = {
-                "ticket_ref": row.get("TicketRef", "").strip(),
-                "name": row.get("Name", "").strip(),
-                "id_number": row.get("IDNumber", "").strip(),
-                "phone": row.get("Phone", "").strip(),
-                "male_dep": row.get("MaleDep", "").strip(),
-                "resort_dep": row.get("ResortDep", "").strip(),
-                "arrival_time": row.get("ArrivalTime", "").strip(),
-                "departure_time": row.get("DepartureTime", "").strip(),
-                "paid_amount": row.get("PaidAmount", "").strip(),
-                "transfer_ref": row.get("TransferRef", "").strip(),
-                "ticket_type": row.get("TicketType", "").strip(),
-                "status": row.get("Status", "").strip() or "booked",
-                "id_doc_url": row.get("ID Doc URL", "").strip(),
-                "group_id": row.get("GroupID", "").strip(),
+                "ticket_ref": (row.get("TicketRef") or "").strip(),
+                "name": (row.get("Name") or "").strip(),
+                "id_number": (row.get("IDNumber") or "").strip().upper(),
+                "phone": _normalize_phone(row.get("Phone") or ""),
+                "male_dep": (row.get("MaleDep") or "").strip(),
+                "resort_dep": (row.get("ResortDep") or "").strip(),
+                "arrival_time": (row.get("ArrivalTime") or "").strip(),
+                "departure_time": (row.get("DepartureTime") or "").strip(),
+                "paid_amount": _normalize_amount(row.get("PaidAmount") or ""),
+                "transfer_ref": (row.get("TransferRef") or "").strip(),
+                "ticket_type": (row.get("TicketType") or "").strip(),
+                "status": (row.get("Status") or "").strip() or "booked",
+                "id_doc_url": (row.get("ID Doc URL") or "").strip(),
+                "group_id": (row.get("GroupID") or "").strip(),
             }
 
         elif is_event:
-            # Map Event headers
             booking = {
-                "ticket_ref": row.get("T. Reference", "").strip(),
-                "name": row.get("Name", "").strip(),
-                "id_number": row.get("ID", "").strip(),
-                "phone": row.get("Number", "").strip(),
-                "male_dep": row.get("Male' Dep", "").strip(),
-                "resort_dep": row.get("Resort Dep", "").strip(),
-                "arrival_time": row.get("ArrivalTime", "").strip(),
-                "departure_time": row.get("DepartureTime", "").strip(),
-                "paid_amount": row.get("Paid Amount", "").strip(),
-                "transfer_ref": row.get("Transfer slip Ref", "").strip(),
-                "ticket_type": row.get("Ticket Type", "").strip(),
-                "status": row.get("Status", "").strip() or "booked",
-                "id_doc_url": row.get("ID Doc URL", "").strip(),
-                "group_id": "",  # Event tab doesn’t have this
+                "ticket_ref": (row.get("T. Reference") or "").strip(),
+                "name": (row.get("Name") or "").strip(),
+                "id_number": (row.get("ID") or "").strip().upper(),
+                "phone": _normalize_phone(row.get("Number") or ""),
+                "male_dep": (row.get("Male' Dep") or "").strip(),
+                "resort_dep": (row.get("Resort Dep") or "").strip(),
+                "arrival_time": (row.get("ArrivalTime") or "").strip(),
+                "departure_time": (row.get("DepartureTime") or "").strip(),
+                "paid_amount": _normalize_amount(row.get("Paid Amount") or ""),
+                "transfer_ref": (row.get("Transfer slip Ref") or "").strip(),
+                "ticket_type": (row.get("Ticket Type") or "").strip(),
+                "status": (row.get("Status") or "").strip() or "booked",
+                "id_doc_url": (row.get("ID Doc URL") or "").strip(),
+                "group_id": "",
+            }
+
+        elif is_raw:
+            booking = {
+                "ticket_ref": (row.get("ticket_ref") or "").strip(),
+                "name": (row.get("name") or "").strip(),
+                "id_number": (row.get("id_number") or "").strip().upper(),
+                "phone": _normalize_phone(row.get("phone") or ""),
+                "male_dep": (row.get("male_dep") or "").strip(),
+                "resort_dep": (row.get("resort_dep") or "").strip(),
+                "arrival_time": (row.get("arrival_time") or "").strip(),
+                "departure_time": (row.get("departure_time") or "").strip(),
+                "paid_amount": _normalize_amount(row.get("paid_amount") or ""),
+                "transfer_ref": (row.get("transfer_ref") or "").strip(),
+                "ticket_type": (row.get("ticket_type") or "").strip(),
+                "status": "booked",
+                "id_doc_url": None,
+                "group_id": (row.get("group_id") or "").strip(),
             }
 
         # --- Validation ---
