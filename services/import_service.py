@@ -35,7 +35,7 @@ def _map_rows_for_sheets(valid_rows: list[dict], event_name: str) -> list[list]:
     return rows
 
 
-def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "General") -> dict:
+def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Master") -> dict:
     """
     Orchestrates bulk import of bookings from a CSV/XLS file.
     Returns a structured result dict:

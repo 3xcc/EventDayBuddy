@@ -154,7 +154,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ===== Callback for Attach Photo =====
-@require_role("checkin_staff")
+@require_role(["booking_staff", "checkin_staff"])
 async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -164,11 +164,14 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # ===== Photo Handler =====
-@require_role("checkin_staff")
+@require_role(["booking_staff", "checkin_staff"])
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     booking_id = context.user_data.get("awaiting_photo_for_booking")
     if not booking_id:
-        return  # ignore random photos
+        await update.message.reply_text(
+            "❌ No booking is awaiting a photo. Please use the '📷 Attach ID Photo' button on a booking first."
+        )
+        return
 
     with get_db() as db:
         booking = db.query(Booking).filter(Booking.id == booking_id).first()

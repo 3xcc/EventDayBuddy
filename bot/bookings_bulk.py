@@ -20,7 +20,14 @@ async def newbookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.message
         if not message or not message.document:
-            await update.message.reply_text("⚠️ Please attach a CSV/XLS file with the bookings.")
+            await update.message.reply_text(
+                "📝 To bulk import bookings, please attach a CSV or Excel file.\n\n"
+                "Usage: /newbookings [EventName]\n"
+                "- Only admins can use this command.\n"
+                "- Attach a CSV/XLS file with the correct columns.\n"
+                "- Optionally specify the event name as an argument.\n"
+                "- The event name will default to the one set by /cpe if not provided."
+            )
             return
 
         # Validate file type
@@ -42,7 +49,16 @@ async def newbookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_bytes.seek(0)
 
         # Event name (from command args or default)
-        event_name = context.args[0] if context.args else "General"
+        # Use event_name from args, else from /cpe (active_event), else default to 'Master'
+        if context.args:
+            event_name = context.args[0]
+        else:
+            with get_db() as db:
+                active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
+                if active_event_cfg and active_event_cfg.value:
+                    event_name = active_event_cfg.value.strip()
+                else:
+                    event_name = "Master"
 
         logger.info(f"[Bot] /newbookings triggered by {update.effective_user.id} for event '{event_name}'")
 
