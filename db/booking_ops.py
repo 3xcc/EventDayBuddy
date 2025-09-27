@@ -5,11 +5,10 @@ from db.init import get_db
 from db.models import Booking, Event
 from sqlalchemy.exc import SQLAlchemyError
 
-def bulk_insert_bookings(rows: List[Dict], triggered_by: str) -> List[int]:
+def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_id: int) -> List[int]:
     """
-    Insert multiple bookings in a single transaction.
-    Returns list of inserted booking IDs.
-    Rolls back if any insert fails.
+    Insert multiple bookings in a single transaction, tied to a specific event_id.
+    Returns list of inserted booking IDs. Rolls back if any insert fails.
     """
     inserted_ids = []
     try:
@@ -18,10 +17,10 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str) -> List[int]:
                 # Always generate ticket_ref if not present or empty
                 ticket_ref = row.get("ticket_ref")
                 if not ticket_ref:
-                    event_name = row.get("event_name") or "Master"
-                    ticket_ref = generate_ticket_ref(event_name)
+                    ticket_ref = generate_ticket_ref(str(event_id))
+
                 booking = Booking(
-                    event_id=_resolve_event_id(db, row.get("event_name")),
+                    event_id=event_id,
                     ticket_ref=ticket_ref,
                     name=row.get("name"),
                     id_number=row.get("id_number"),
@@ -37,7 +36,7 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str) -> List[int]:
                 db.flush()  # assign ID before commit
                 inserted_ids.append(booking.id)
 
-            logger.info(f"[DB] ✅ Bulk inserted {len(inserted_ids)} bookings (by {triggered_by})")
+            logger.info(f"[DB] ✅ Bulk inserted {len(inserted_ids)} bookings for event_id={event_id} (by {triggered_by})")
 
         return inserted_ids
 

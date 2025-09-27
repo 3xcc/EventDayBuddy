@@ -3,20 +3,17 @@ from utils.booking_parser import parse_bookings_file
 from utils.import_summary import format_import_summary
 from db import booking_ops
 from db.init import get_db
-from db.models import Booking
+from db.models import Booking, Event, Config
 from sheets import booking_io
 from utils.booking_schema import build_master_row  # use canonical builder
 
 
 def _map_rows_for_sheets(valid_rows: list[dict], event_name: str) -> list[list]:
-    """
-    Convert parsed booking dicts into row lists aligned with MASTER_HEADERS.
-    Uses build_master_row to ensure schema consistency.
-    """
+    """Convert parsed booking dicts into row lists aligned with MASTER_HEADERS."""
     rows = []
     for r in valid_rows:
         booking_dict = {
-            "ticket_ref": r.get("ticket_ref", ""),  # Use ticket_ref if present, else blank
+            "ticket_ref": r.get("ticket_ref", ""),
             "name": r.get("name"),
             "id_number": r.get("id_number"),
             "phone": r.get("phone"),
@@ -37,19 +34,28 @@ def _map_rows_for_sheets(valid_rows: list[dict], event_name: str) -> list[list]:
     return rows
 
 
-
-def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Master") -> dict:
+def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = None) -> dict:
     """
     Orchestrates bulk import of bookings from a CSV/XLS file.
-    Returns a structured result dict:
-    {
-        "inserted": int,
-        "skipped": int,
-        "errors": list[str],
-        "missing_photos": list[str]
-    }
+    Ensures bookings are tied to the active Event row in DB.
     """
     try:
+        # Step 0: Resolve active event
+        with get_db() as db:
+            if not event_name:
+                cfg = db.query(Config).filter(Config.key == "active_event").first()
+                event_name = cfg.value if cfg else "Master"
+
+            # Ensure Event row exists
+            event = db.query(Event).filter(Event.name == event_name).first()
+            if not event:
+                event = Event(name=event_name)
+                db.add(event)
+                db.commit()
+                db.refresh(event)
+
+            event_id = event.id
+
         # Step 1: Parse file
         valid_rows, errors = parse_bookings_file(file_bytes)
         logger.info(f"[Import] Parsed {len(valid_rows)} valid rows, {len(errors)} errors")
@@ -63,10 +69,10 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Mas
             }
 
         # Step 2: Insert into DB (atomic transaction)
-        inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by)
-        logger.info(f"[Import] Inserted {len(inserted_ids)} bookings into DB")
+        inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by, event_id=event_id)
+        logger.info(f"[Import] Inserted {len(inserted_ids)} bookings into DB for event '{event_name}'")
 
-        # ✅ Step 2.5: Fetch authoritative records back from DB
+        # Step 2.5: Fetch authoritative records back from DB
         with get_db() as db:
             inserted_bookings = db.query(Booking).filter(Booking.id.in_(inserted_ids)).all()
             booking_dicts = []
@@ -90,10 +96,10 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Mas
                     "updated_at": b.updated_at,
                 })
 
-        # Step 3: Append to Sheets (map dicts → Master rows)
+        # Step 3: Append to Sheets
         sheet_rows = _map_rows_for_sheets(booking_dicts, event_name)
         booking_io.bulk_append_bookings(event_name, sheet_rows)
-        logger.info(f"[Import] Appended {len(sheet_rows)} bookings to Sheets")
+        logger.info(f"[Import] Appended {len(sheet_rows)} bookings to Sheets for event '{event_name}'")
 
         # Step 4: Collect missing photos
         missing_photos = [row["id_number"] for row in booking_dicts if row.get("id_number")]
@@ -110,7 +116,3 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Mas
 
     except Exception as e:
         log_and_raise("ImportService", "running bulk import", e)
-
-def summarize_import(result: dict) -> str:
-    """Formats operator-facing summary message."""
-    return format_import_summary(result)
