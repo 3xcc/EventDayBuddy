@@ -2,6 +2,8 @@ from config.logger import logger, log_and_raise
 from utils.booking_parser import parse_bookings_file
 from utils.import_summary import format_import_summary
 from db import booking_ops
+from db.init import get_db
+from db.models import Booking
 from sheets import booking_io
 from utils.booking_schema import build_master_row  # use canonical builder
 
@@ -35,6 +37,7 @@ def _map_rows_for_sheets(valid_rows: list[dict], event_name: str) -> list[list]:
     return rows
 
 
+
 def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Master") -> dict:
     """
     Orchestrates bulk import of bookings from a CSV/XLS file.
@@ -63,13 +66,37 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Mas
         inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by)
         logger.info(f"[Import] Inserted {len(inserted_ids)} bookings into DB")
 
+        # ✅ Step 2.5: Fetch authoritative records back from DB
+        with get_db() as db:
+            inserted_bookings = db.query(Booking).filter(Booking.id.in_(inserted_ids)).all()
+            booking_dicts = []
+            for b in inserted_bookings:
+                booking_dicts.append({
+                    "ticket_ref": b.ticket_ref,
+                    "name": b.name,
+                    "id_number": b.id_number,
+                    "phone": b.phone,
+                    "male_dep": b.male_dep,
+                    "resort_dep": b.resort_dep,
+                    "arrival_time": b.arrival_time,
+                    "departure_time": b.departure_time,
+                    "paid_amount": b.paid_amount,
+                    "transfer_ref": b.transfer_ref,
+                    "ticket_type": b.ticket_type,
+                    "status": b.status,
+                    "id_doc_url": b.id_doc_url,
+                    "group_id": b.group_id,
+                    "created_at": b.created_at,
+                    "updated_at": b.updated_at,
+                })
+
         # Step 3: Append to Sheets (map dicts → Master rows)
-        sheet_rows = _map_rows_for_sheets(valid_rows, event_name)
+        sheet_rows = _map_rows_for_sheets(booking_dicts, event_name)
         booking_io.bulk_append_bookings(event_name, sheet_rows)
         logger.info(f"[Import] Appended {len(sheet_rows)} bookings to Sheets")
 
         # Step 4: Collect missing photos
-        missing_photos = [row["id_number"] for row in valid_rows if row.get("id_number")]
+        missing_photos = [row["id_number"] for row in booking_dicts if row.get("id_number")]
 
         # Step 5: Build result object
         result = {
@@ -83,7 +110,6 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = "Mas
 
     except Exception as e:
         log_and_raise("ImportService", "running bulk import", e)
-
 
 def summarize_import(result: dict) -> str:
     """Formats operator-facing summary message."""
