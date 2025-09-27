@@ -2,57 +2,6 @@
 import subprocess
 import tempfile
 import os
-
-async def runtests(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin-only: Run pytest suite, send results, and clean up test data."""
-    user_id = str(update.effective_user.id)
-    with get_db() as db:
-        user = db.query(User).filter(User.chat_id == user_id).first()
-        role = user.role if user else "viewer"
-    if role != "admin":
-        await update.message.reply_text("❌ Only admins can run tests.")
-        return
-    await update.message.reply_text("🧪 Running all tests... This may take a minute.")
-    try:
-        # Run pytest and capture output
-        result = subprocess.run([
-            "pytest", "tests/", "--tb=short", "-q", "--disable-warnings"
-        ], capture_output=True, text=True, timeout=300)
-        output = result.stdout + "\n" + result.stderr
-
-        # Clean up test data in DB (truncate all tables except alembic_version)
-        try:
-            from sqlalchemy import text
-            with get_db() as db:
-                db.execute(text('''
-                    DO $$ DECLARE r RECORD;
-                    BEGIN
-                        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename != 'alembic_version') LOOP
-                            EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
-                        END LOOP;
-                    END $$;
-                '''))
-                db.commit()
-        except Exception as cleanup_err:
-            logger.error(f"[RunTests] DB cleanup failed: {cleanup_err}", exc_info=True)
-
-        # TODO: Add Google Sheets cleanup if needed
-
-        # Send output as file if too long
-        if len(output) > 3500:
-            with tempfile.NamedTemporaryFile(delete=False, mode="w+t", suffix=".txt") as f:
-                f.write(output)
-                f.flush()
-                f.seek(0)
-                await update.message.reply_document(document=open(f.name, "rb"), filename="test_results.txt")
-            os.unlink(f.name)
-        else:
-            await update.message.reply_text(f"<pre>{output}</pre>", parse_mode="HTML")
-    except subprocess.TimeoutExpired:
-        await update.message.reply_text("❌ Test run timed out.")
-    except Exception as e:
-        logger.error(f"[RunTests] Test run failed: {e}", exc_info=True)
-        await update.message.reply_text(f"❌ Test run failed: {e}")
 import asyncio
 from io import BytesIO
 from telegram import Update
@@ -213,6 +162,57 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_and_raise("Bot", "handling /sleeptime command", e)
 
 
+async def runtests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin-only: Run pytest suite, send results, and clean up test data."""
+    user_id = str(update.effective_user.id)
+    with get_db() as db:
+        user = db.query(User).filter(User.chat_id == user_id).first()
+        role = user.role if user else "viewer"
+    if role != "admin":
+        await update.message.reply_text("❌ Only admins can run tests.")
+        return
+    await update.message.reply_text("🧪 Running all tests... This may take a minute.")
+    try:
+        # Run pytest and capture output
+        result = subprocess.run([
+            "pytest", "tests/", "--tb=short", "-q", "--disable-warnings"
+        ], capture_output=True, text=True, timeout=300)
+        output = result.stdout + "\n" + result.stderr
+
+        # Clean up test data in DB (truncate all tables except alembic_version)
+        try:
+            from sqlalchemy import text
+            with get_db() as db:
+                db.execute(text('''
+                    DO $$ DECLARE r RECORD;
+                    BEGIN
+                        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename != 'alembic_version') LOOP
+                            EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+                        END LOOP;
+                    END $$;
+                '''))
+                db.commit()
+        except Exception as cleanup_err:
+            logger.error(f"[RunTests] DB cleanup failed: {cleanup_err}", exc_info=True)
+
+        # TODO: Add Google Sheets cleanup if needed
+
+        # Send output as file if too long
+        if len(output) > 3500:
+            with tempfile.NamedTemporaryFile(delete=False, mode="w+t", suffix=".txt") as f:
+                f.write(output)
+                f.flush()
+                f.seek(0)
+                await update.message.reply_document(document=open(f.name, "rb"), filename="test_results.txt")
+            os.unlink(f.name)
+        else:
+            await update.message.reply_text(f"<pre>{output}</pre>", parse_mode="HTML")
+    except subprocess.TimeoutExpired:
+        await update.message.reply_text("❌ Test run timed out.")
+    except Exception as e:
+        logger.error(f"[RunTests] Test run failed: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ Test run failed: {e}")
+
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
     global application
@@ -237,8 +237,8 @@ async def init_bot():
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
 
-    # Register /runtests admin command
-    app.add_handler(CommandHandler("runtests", runtests))
+        # Register /runtests admin command
+        app.add_handler(CommandHandler("runtests", runtests))
 
         # Bulk booking handlers
         bookings_bulk.register_handlers(app)
