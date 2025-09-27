@@ -47,16 +47,66 @@ def parse_edit_args(args, raw_text: str) -> dict:
     return updates
 
 
+
+from utils.booking_parser import parse_booking_input
+
+
 @require_role("booking_staff")
 async def editbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Edit an existing booking by ticket_ref. Updates DB, logs changes, and syncs to Sheets."""
+    """Edit an existing booking by searching with ID_NUMBER, then edit by ticket_ref."""
     try:
-        if not context.args:
-            await update.message.reply_text("❌ Usage: /editbooking <ticket_ref> field=value ...")
+        # If no args, show helper
+        if (not context.args) and (not update.message.text or update.message.text.strip() == "/editbooking"):
+            await update.message.reply_text(
+                "📝 To edit a booking, search by ID Number first:\n\n"
+                "• /editbooking <ID_NUMBER>\n\n"
+                "You will see a list of bookings for that ID.\n"
+                "Then, use one of these formats to edit:\n\n"
+                "Option 1: Inline\n"
+                "/editbooking <ticket_ref> field=value ...\n\n"
+                "Option 2: Multi-line (first line is ticket_ref)\n"
+                "1. <ticket_ref>\n"
+                "2. Name\n"
+                "3. ID Number\n"
+                "4. Phone\n"
+                "5. Male Departure\n"
+                "6. Resort Departure\n"
+                "7. Paid Amount\n"
+                "8. Transfer Ref\n"
+                "9. Ticket Type\n"
+                "(Arrival/Departure times optional)\n\n"
+                "👉 Start by searching: /editbooking <ID_NUMBER>"
+            )
             return
 
-        ticket_ref = context.args[0]
-        updates = parse_edit_args(context.args[1:], update.message.text)
+        # If only one arg, treat as ID_NUMBER search
+        if len(context.args) == 1 and context.args[0].isalnum() and len(context.args[0]) >= 3:
+            id_number = context.args[0].strip().upper()
+            with get_db() as db:
+                matches = db.query(Booking).filter(Booking.id_number == id_number).all()
+                if not matches:
+                    await update.message.reply_text(f"❌ No bookings found for ID: {id_number}")
+                    return
+                msg = [f"🔎 Bookings for ID {id_number}:"]
+                for b in matches:
+                    msg.append(f"• {b.ticket_ref}: {b.name} | {b.phone} | {b.status}")
+                msg.append("\nTo edit, use: /editbooking <ticket_ref> field=value ... or multi-line edit.")
+                await update.message.reply_text("\n".join(msg))
+            return
+
+        # Multi-line edit: first line is ticket_ref, rest is booking fields
+        if not context.args and update.message.text:
+            lines = update.message.text.splitlines()
+            if len(lines) >= 2:
+                ticket_ref = lines[0].replace("/editbooking", "").strip()
+                parsed = parse_booking_input("\n".join(lines[1:]))
+                updates = parsed
+            else:
+                await update.message.reply_text("❌ Usage: /editbooking <ticket_ref> field=value ... or multi-line edit.")
+                return
+        else:
+            ticket_ref = context.args[0]
+            updates = parse_edit_args(context.args[1:], update.message.text)
 
         if not updates:
             await update.message.reply_text("ℹ️ No updates provided.")
