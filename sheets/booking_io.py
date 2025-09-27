@@ -64,11 +64,11 @@ def append_to_master(event_name: str, booking_row: list):
     try:
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{MASTER_TAB}!A:A",
+            range=f"{MASTER_TAB}!A1",   # ✅ changed from !A:A
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": [booking_row]}
-        ).execute()
+            ).execute()
         logger.info(f"[Sheets] Booking appended to Master for event '{event_name}'.")
     except Exception as e:
         log_and_raise("Sheets", "appending booking to Master", e)
@@ -80,7 +80,7 @@ def append_to_event(event_name: str, master_row: list):
         event_row = build_event_row(master_row)
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{event_name}!A:A",
+            range=f"{event_name}!A1",   # ✅ changed from !A:A
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": [event_row]}
@@ -105,7 +105,7 @@ def bulk_append_bookings(event_name: str, master_rows: list[list]):
         # Append to Master
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{MASTER_TAB}!A:A",
+            range=f"{MASTER_TAB}!A1",   # ✅ changed from !A:A
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": master_rows}
@@ -113,13 +113,13 @@ def bulk_append_bookings(event_name: str, master_rows: list[list]):
 
         # Derive and append to Event
         event_rows = [build_event_row(row) for row in master_rows]
-        service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{event_name}!A:A",
-            valueInputOption="RAW",
-            insertDataOption="INSERT_ROWS",
-            body={"values": event_rows}
-        ).execute()
+            service.spreadsheets().values().append(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{event_name}!A1",   # ✅ changed from !A:A
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": event_rows}
+            ).execute()
 
         logger.info(f"[Sheets] Bulk appended {len(master_rows)} bookings to Master and '{event_name}' tabs.")
 
@@ -130,10 +130,10 @@ def bulk_append_bookings(event_name: str, master_rows: list[list]):
 def update_booking_row(event_name: str, master_row: list, event_row: list):
     """
     Update an existing booking in both Master and Event tabs.
-    Looks up by TicketRef (col 3 in Master, col 2 in Event).
+    Looks up by TicketRef (dynamic index from headers).
     """
     try:
-        ticket_ref = master_row[2]
+        ticket_ref = master_row[MASTER_HEADERS.index("TicketRef")]
 
         # --- Update Master ---
         validate_sheet_alignment(MASTER_TAB, MASTER_HEADERS)
@@ -143,8 +143,9 @@ def update_booking_row(event_name: str, master_row: list, event_row: list):
         ).execute()
         master_rows = master_result.get("values", [])
 
+        idx_ticket_master = MASTER_HEADERS.index("TicketRef")
         for idx, row in enumerate(master_rows, start=2):
-            if len(row) > 2 and row[2] == ticket_ref:
+            if len(row) > idx_ticket_master and row[idx_ticket_master].strip() == ticket_ref:
                 service.spreadsheets().values().update(
                     spreadsheetId=SPREADSHEET_ID,
                     range=f"{MASTER_TAB}!A{idx}:{excel_col(len(MASTER_HEADERS))}{idx}",
@@ -162,8 +163,9 @@ def update_booking_row(event_name: str, master_row: list, event_row: list):
         ).execute()
         event_rows = event_result.get("values", [])
 
+        idx_ticket_event = EVENT_HEADERS.index("T. Reference")
         for idx, row in enumerate(event_rows, start=2):
-            if len(row) > 1 and row[1] == ticket_ref:
+            if len(row) > idx_ticket_event and row[idx_ticket_event].strip() == ticket_ref:
                 service.spreadsheets().values().update(
                     spreadsheetId=SPREADSHEET_ID,
                     range=f"{event_name}!A{idx}:{excel_col(len(EVENT_HEADERS))}{idx}",
@@ -179,7 +181,7 @@ def update_booking_row(event_name: str, master_row: list, event_row: list):
 def update_booking_photo(event_name: str, ticket_ref: str, photo_url: str):
     """
     Update only the ID Doc URL for a booking in both Master and Event tabs.
-    Looks up by TicketRef (col 3 in Master, col 2 in Event).
+    Looks up by TicketRef (dynamic index from headers).
     """
     try:
         # --- Update Master ---
@@ -190,14 +192,14 @@ def update_booking_photo(event_name: str, ticket_ref: str, photo_url: str):
         ).execute()
         master_rows = master_result.get("values", [])
 
-        idx_ticket = MASTER_HEADERS.index("TicketRef")
-        idx_photo = MASTER_HEADERS.index("ID Doc URL")
+        idx_ticket_master = MASTER_HEADERS.index("TicketRef")
+        idx_photo_master = MASTER_HEADERS.index("ID Doc URL")
 
         for idx, row in enumerate(master_rows, start=2):
-            if len(row) > idx_ticket and row[idx_ticket] == ticket_ref:
+            if len(row) > idx_ticket_master and row[idx_ticket_master].strip() == ticket_ref:
                 service.spreadsheets().values().update(
                     spreadsheetId=SPREADSHEET_ID,
-                    range=f"{MASTER_TAB}!{excel_col(idx_photo+1)}{idx}",
+                    range=f"{MASTER_TAB}!{excel_col(idx_photo_master+1)}{idx}",
                     valueInputOption="RAW",
                     body={"values": [[photo_url]]}
                 ).execute()
@@ -216,7 +218,7 @@ def update_booking_photo(event_name: str, ticket_ref: str, photo_url: str):
         idx_photo_event = EVENT_HEADERS.index("ID Doc URL")
 
         for idx, row in enumerate(event_rows, start=2):
-            if len(row) > idx_ticket_event and row[idx_ticket_event] == ticket_ref:
+            if len(row) > idx_ticket_event and row[idx_ticket_event].strip() == ticket_ref:
                 service.spreadsheets().values().update(
                     spreadsheetId=SPREADSHEET_ID,
                     range=f"{event_name}!{excel_col(idx_photo_event+1)}{idx}",

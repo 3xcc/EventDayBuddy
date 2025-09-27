@@ -25,11 +25,15 @@ def validate_sheet_alignment(sheet_name: str, expected_columns: list) -> bool:
         ).execute()
         actual_headers = result.get("values", [[]])[0]
 
+        # Normalize: strip whitespace and unify case
+        actual_headers = [h.strip() for h in actual_headers]
+        expected_norm = [h.strip() for h in expected_columns]
+
         # Pad to expected length
-        actual_headers += [""] * (len(expected_columns) - len(actual_headers))
+        actual_headers += [""] * (len(expected_norm) - len(actual_headers))
 
         aligned = True
-        for idx, expected in enumerate(expected_columns):
+        for idx, expected in enumerate(expected_norm):
             actual = actual_headers[idx] if idx < len(actual_headers) else ""
             if actual != expected:
                 logger.warning(
@@ -38,8 +42,8 @@ def validate_sheet_alignment(sheet_name: str, expected_columns: list) -> bool:
                 )
                 aligned = False
 
-        if len(actual_headers) > len(expected_columns):
-            for idx in range(len(expected_columns), len(actual_headers)):
+        if len(actual_headers) > len(expected_norm):
+            for idx in range(len(expected_norm), len(actual_headers)):
                 logger.warning(
                     f"[Sheets] Extra header in '{sheet_name}' col {idx+1}: "
                     f"'{actual_headers[idx]}' (not expected)"
