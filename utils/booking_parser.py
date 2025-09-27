@@ -1,5 +1,4 @@
-import csv
-import io
+import csv, io, logging
 from utils.money import parse_amount
 from decimal import Decimal, InvalidOperation
 
@@ -56,7 +55,20 @@ def parse_bookings_file(file_bytes: bytes) -> tuple[list[dict], list[str]]:
     Returns (valid_rows, errors).
     """
     valid_rows, errors = [], []
-    reader = csv.DictReader(io.StringIO(file_bytes.decode("utf-8-sig")))
+
+    # Try decoding with common encodings
+    text = None
+    for enc in ("utf-8-sig", "utf-16", "latin1"):
+        try:
+            text = file_bytes.decode(enc)
+            logging.info(f"[Parser] Decoded file using {enc}")
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        raise ValueError("Unsupported file encoding")
+
+    reader = csv.DictReader(io.StringIO(text))
 
     # Validate headers
     missing_headers = [h for h in BOOKING_SCHEMA.keys() if h not in reader.fieldnames]
