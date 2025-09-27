@@ -37,3 +37,7 @@ def main():
     finally:
         print("[DEBUG] main() finally block reached.")
         logger.info("🛑 EventDayBuddy has stopped.")
+
+# Ensure main() is called when running this file directly
+if __name__ == "__main__":
+    main()
