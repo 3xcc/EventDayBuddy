@@ -1,3 +1,4 @@
+from services.booking_service import generate_ticket_ref
 from typing import List, Dict
 from config.logger import logger, log_and_raise
 from db.init import get_db
@@ -14,9 +15,14 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str) -> List[int]:
     try:
         with get_db() as db:
             for row in rows:
+                # Always generate ticket_ref if not present or empty
+                ticket_ref = row.get("ticket_ref")
+                if not ticket_ref:
+                    event_name = row.get("event_name") or "General"
+                    ticket_ref = generate_ticket_ref(event_name)
                 booking = Booking(
                     event_id=_resolve_event_id(db, row.get("event_name")),
-                    ticket_ref=row.get("ticket_ref"),  # may be generated upstream
+                    ticket_ref=ticket_ref,
                     name=row.get("name"),
                     id_number=row.get("id_number"),
                     phone=row.get("phone"),
