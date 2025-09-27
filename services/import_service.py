@@ -14,7 +14,7 @@ def _map_rows_for_sheets(valid_rows: list[dict], event_name: str) -> list[list]:
     rows = []
     for r in valid_rows:
         booking_dict = {
-            "ticket_ref": r.get("ticket_ref"),
+            "ticket_ref": r.get("ticket_ref", ""),  # Use ticket_ref if present, else blank
             "name": r.get("name"),
             "id_number": r.get("id_number"),
             "phone": r.get("phone"),
@@ -29,6 +29,7 @@ def _map_rows_for_sheets(valid_rows: list[dict], event_name: str) -> list[list]:
             "id_doc_url": None,
             "group_id": r.get("group_id"),
             "created_at": None,
+            "updated_at": None,
         }
         rows.append(build_master_row(booking_dict, event_name))
     return rows
