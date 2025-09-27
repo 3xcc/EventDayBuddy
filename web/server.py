@@ -42,7 +42,7 @@ async def startup_event():
         logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
         print("[DEBUG] Exception in startup_event:", e)
         traceback.print_exc()
-        sys.exit(1)
+        # sys.exit(1)
 
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
