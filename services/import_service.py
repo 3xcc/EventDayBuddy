@@ -116,3 +116,26 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = None
 
     except Exception as e:
         log_and_raise("ImportService", "running bulk import", e)
+
+def summarize_import(result: dict) -> str:
+    """
+    Build a human-readable summary of the bulk import result.
+    Expected result keys: inserted, errors, skipped, missing_photos.
+    """
+    inserted = result.get("inserted", 0)
+    errors = result.get("errors", 0)
+    skipped = result.get("skipped", 0)
+    missing_photos = result.get("missing_photos", [])
+
+    parts = [f"✅ Inserted: {inserted}"]
+    if skipped:
+        parts.append(f"⚠️ Skipped: {skipped}")
+    if errors:
+        # if errors is a list, show count
+        parts.append(f"❌ Errors: {errors if isinstance(errors, int) else len(errors)}")
+    if missing_photos:
+        preview = ", ".join(missing_photos[:3])
+        more = f" (+{len(missing_photos)-3} more)" if len(missing_photos) > 3 else ""
+        parts.append(f"🖼 Missing Photos: {len(missing_photos)} [{preview}{more}]")
+
+    return "\n".join(parts)
