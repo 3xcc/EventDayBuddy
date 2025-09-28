@@ -52,8 +52,9 @@ async def shutdown_event():
     try:
         from bot.handlers import application
         if getattr(application, "running", False):
-            await application.shutdown()
+            # Correct order: stop first, then shutdown
             await application.stop()
+            await application.shutdown()
             logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
         else:
             logger.warning("[Shutdown] ⚠️ Bot was already stopped.")
@@ -62,7 +63,6 @@ async def shutdown_event():
     finally:
         # Always release DB connections
         close_engine()
-
 
 # ===== Routes =====
 @app.get("/", tags=["Health"])
