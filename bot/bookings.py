@@ -177,27 +177,28 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 # ===== Photo Handler =====
 @require_role("booking_staff")
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    booking_id = context.user_data.get("awaiting_photo_for_booking")
-    id_number_arg = None
+    id_arg = None
 
-    # Support /attachphoto <ID_NUMBER>
-    if not booking_id and context.args:
-        id_number_arg = context.args[0].strip()
+    # Support /attachphoto <ID_NUMBER or TICKET_REF>
+    if context.args:
+        id_arg = context.args[0].strip()
 
-    if not booking_id and not id_number_arg:
+    if not id_arg:
         await update.message.reply_text(
-            "❌ No booking is awaiting a photo.\n"
-            "Use the '📷 Attach ID Photo' button or run `/attachphoto <ID_NUMBER>`."
+            "❌ No booking specified.\n"
+            "Use `/attachphoto <ID_NUMBER>` or `/attachphoto <TICKET_REF>`."
         )
         return
 
     with get_db() as db:
-        if booking_id:
-            booking = db.query(Booking).filter(Booking.id == booking_id).first()
-        else:
-            matches = db.query(Booking).filter(Booking.id_number == id_number_arg).all()
+        # Try exact ticket_ref match first (since it’s unique)
+        booking = db.query(Booking).filter(Booking.ticket_ref == id_arg).first()
+
+        if not booking:
+            # Fall back to id_number lookup
+            matches = db.query(Booking).filter(Booking.id_number == id_arg).all()
             if not matches:
-                await update.message.reply_text(f"❌ No booking found for ID {id_number_arg}")
+                await update.message.reply_text(f"❌ No booking found for `{id_arg}`")
                 return
             if len(matches) > 1:
                 # Show ticket refs + names for disambiguation
@@ -206,7 +207,7 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
                     for b in matches
                 ]
                 await update.message.reply_text(
-                    f"⚠️ Multiple bookings found for ID {id_number_arg}:\n"
+                    f"⚠️ Multiple bookings found for ID {id_arg}:\n"
                     + "\n".join(lines) +
                     "\n\nPlease retry with `/attachphoto <TICKET_REF>`."
                 )
@@ -227,7 +228,7 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"✅ Photo attached to {booking.name} "
                 f"(ID: {booking.id_number}, Ticket: {booking.ticket_ref})"
             )
-            logger.info(f"[Booking] Photo attached for {booking.name} ({booking.id_number}, {booking.ticket_ref})")
-
-    # Clear state if inline flow
-    context.user_data.pop("awaiting_photo_for_booking", None)
+            logger.info(
+                f"[Booking] Photo attached for {booking.name} "
+                f"(ID: {booking.id_number}, Ticket: {booking.ticket_ref})"
+            )
