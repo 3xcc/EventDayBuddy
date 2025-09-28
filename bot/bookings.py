@@ -179,9 +179,15 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     id_arg = None
 
-    # Support /attachphoto <ID_NUMBER or TICKET_REF>
+    # Case 1: /attachphoto <arg> as plain text
     if context.args:
         id_arg = context.args[0].strip()
+
+    # Case 2: /attachphoto <arg> used as caption on a photo
+    elif update.message and update.message.caption:
+        parts = update.message.caption.strip().split()
+        if len(parts) > 1:
+            id_arg = parts[1].strip()
 
     if not id_arg:
         await update.message.reply_text(
@@ -191,21 +197,17 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     with get_db() as db:
-        # Try exact ticket_ref match first (since it’s unique)
+        # Try ticket_ref first (unique)
         booking = db.query(Booking).filter(Booking.ticket_ref == id_arg).first()
 
         if not booking:
-            # Fall back to id_number lookup
+            # Fall back to id_number
             matches = db.query(Booking).filter(Booking.id_number == id_arg).all()
             if not matches:
                 await update.message.reply_text(f"❌ No booking found for `{id_arg}`")
                 return
             if len(matches) > 1:
-                # Show ticket refs + names for disambiguation
-                lines = [
-                    f"- {b.ticket_ref}: {b.name} (event {b.event_id})"
-                    for b in matches
-                ]
+                lines = [f"- {b.ticket_ref}: {b.name} (event {b.event_id})" for b in matches]
                 await update.message.reply_text(
                     f"⚠️ Multiple bookings found for ID {id_arg}:\n"
                     + "\n".join(lines) +
@@ -228,7 +230,4 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"✅ Photo attached to {booking.name} "
                 f"(ID: {booking.id_number}, Ticket: {booking.ticket_ref})"
             )
-            logger.info(
-                f"[Booking] Photo attached for {booking.name} "
-                f"(ID: {booking.id_number}, Ticket: {booking.ticket_ref})"
-            )
+            logger.info(f"[Booking] Photo attached for {booking.name} ({booking.id_number}, {booking.ticket_ref})")
