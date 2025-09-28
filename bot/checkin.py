@@ -63,13 +63,13 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
             if method == "id":
                 booking = db.query(Booking).filter(
                     Booking.status == "booked",
-                    Booking.event_name == event_name,
+                    Booking.event_id == event_name,
                     Booking.id_number.ilike(f"%{query}%")
                 ).first()
             else:
                 booking = db.query(Booking).filter(
                     Booking.status == "booked",
-                    Booking.event_name == event_name,
+                    Booking.event_id == event_name,
                     Booking.phone.ilike(f"%{query}%")
                 ).first()
 
