@@ -147,14 +147,14 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(buttons)
 
         await update.message.reply_text("\n".join(msg_lines), reply_markup=reply_markup)
-    logger.info(f"[Booking] New booking for {name} ({id_number}) in event '{event_name}'")
+        logger.info(f"[Booking] New booking for {name} ({id_number}) in event '{event_name}'")
 
     except Exception as e:
         log_and_raise("Booking", "creating new booking", e)
 
 
 # ===== Callback for Attach Photo =====
-@require_role(["booking_staff", "checkin_staff"])
+@require_role("booking_staff")
 async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # If called as a command (not a callback), show help
     if update.message:
