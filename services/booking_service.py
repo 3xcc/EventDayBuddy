@@ -10,7 +10,7 @@ def generate_ticket_ref(event_name: str) -> str:
 
 def create_booking(
     db,
-    event_id,
+    event_name,
     name,
     id_number,
     phone,
@@ -25,22 +25,21 @@ def create_booking(
 ):
     from db.models import Event
     # === Validation ===
-    if not all([event_id, name, id_number]):
-        raise ValueError("Missing required booking fields: event_id, name, id_number")
+    if not all([event_name, name, id_number]):
+        raise ValueError("Missing required booking fields: event_name, name, id_number")
 
     # Normalize inputs
     id_number = id_number.strip().upper()
     phone = phone.strip() if phone else None
 
-    # Fetch event name for ticket ref
-    event = db.query(Event).filter(Event.id == event_id).first()
+    # Fetch event by name (ensure it exists)
+    event = db.query(Event).filter(Event.name == event_name).first()
     if not event:
-        raise ValueError(f"Event with id {event_id} not found")
-    event_name = event.name
+        raise ValueError(f"Event with name {event_name} not found")
 
     # Deduplication
     existing = db.query(Booking).filter(
-        Booking.event_id == event_id,
+        Booking.event_id == event_name,
         Booking.id_number == id_number
     ).first()
     if existing:
@@ -50,7 +49,7 @@ def create_booking(
     ticket_ref = generate_ticket_ref(event_name)
 
     booking = Booking(
-        event_id=event_id,
+        event_id=event_name,
         ticket_ref=ticket_ref,
         name=name.strip(),
         id_number=id_number,

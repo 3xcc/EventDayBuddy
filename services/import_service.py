@@ -54,7 +54,7 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = None
                 db.commit()
                 db.refresh(event)
 
-            event_id = event.id
+            event_name = event.name
 
         # Step 1: Parse file
         valid_rows, errors = parse_bookings_file(file_bytes)
@@ -69,7 +69,7 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = None
             }
 
         # Step 2: Insert into DB (atomic transaction)
-        inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by, event_id=event_id)
+    inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by, event_name=event_name)
         logger.info(f"[Import] Inserted {len(inserted_ids)} bookings into DB for event '{event_name}'")
 
         # Step 2.5: Fetch authoritative records back from DB

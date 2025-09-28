@@ -147,7 +147,7 @@ async def newbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(buttons)
 
         await update.message.reply_text("\n".join(msg_lines), reply_markup=reply_markup)
-        logger.info(f"[Booking] New booking for {name} ({id_number}) in event '{event_name}'")
+    logger.info(f"[Booking] New booking for {name} ({id_number}) in event '{event_name}'")
 
     except Exception as e:
         log_and_raise("Booking", "creating new booking", e)
@@ -196,7 +196,7 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
 
             if not DRY_RUN:
                 # Update only the photo column in both tabs
-                update_booking_photo(booking.event_name, booking.ticket_ref, file_url)
+                update_booking_photo(booking.event_id, booking.ticket_ref, file_url)
 
             await update.message.reply_text(
                 f"✅ Photo attached to {booking.name} ({booking.ticket_ref})"

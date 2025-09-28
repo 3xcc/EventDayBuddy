@@ -41,9 +41,9 @@ class Booking(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Event reference
-    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
-    event = relationship("Event", back_populates="bookings")
+    # Event reference (now string, references event name)
+    event_id = Column(String, ForeignKey("events.name", ondelete="CASCADE"), nullable=False)
+    event = relationship("Event", back_populates="bookings", primaryjoin="Booking.event_id==Event.name")
 
     ticket_ref = Column(String, nullable=False, unique=True, index=True)
     name = Column(String, nullable=False)
@@ -173,7 +173,7 @@ class BoardingSession(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     boat_number = Column(Integer, ForeignKey("boats.boat_number", ondelete="CASCADE"), nullable=False, index=True)
-    event_name = Column(String, nullable=True)  # ⚠️ candidate for refactor to Event FK later
+    event_id = Column(String, nullable=True)  # ⚠️ candidate for refactor to Event FK later
     started_by = Column(String, ForeignKey("users.chat_id", ondelete="CASCADE"), nullable=False, index=True)
     is_active = Column(Boolean, default=True, index=True)
     started_at = Column(DateTime(timezone=True), server_default=func.now())

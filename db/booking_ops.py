@@ -5,9 +5,9 @@ from db.init import get_db
 from db.models import Booking, Event
 from sqlalchemy.exc import SQLAlchemyError
 
-def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_id: int) -> List[int]:
+def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_name: str) -> List[int]:
     """
-    Insert multiple bookings in a single transaction, tied to a specific event_id.
+    Insert multiple bookings in a single transaction, tied to a specific event_name (string).
     Returns list of inserted booking IDs. Rolls back if any insert fails.
     """
     inserted_ids = []
@@ -17,10 +17,10 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_id: int) -> 
                 # Always generate ticket_ref if not present or empty
                 ticket_ref = row.get("ticket_ref")
                 if not ticket_ref:
-                    ticket_ref = generate_ticket_ref(str(event_id))
+                    ticket_ref = generate_ticket_ref(str(event_name))
 
                 booking = Booking(
-                    event_id=event_id,
+                    event_id=event_name,
                     ticket_ref=ticket_ref,
                     name=row.get("name"),
                     id_number=row.get("id_number"),
@@ -36,7 +36,7 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_id: int) -> 
                 db.flush()  # assign ID before commit
                 inserted_ids.append(booking.id)
 
-            logger.info(f"[DB] ✅ Bulk inserted {len(inserted_ids)} bookings for event_id={event_id} (by {triggered_by})")
+            logger.info(f"[DB] ✅ Bulk inserted {len(inserted_ids)} bookings for event_name={event_name} (by {triggered_by})")
 
         return inserted_ids
 
@@ -67,10 +67,10 @@ def update_booking(booking_id: int, fields: Dict, triggered_by: str) -> bool:
         log_and_raise("DB Update", f"updating booking {booking_id}", e)
 
 
-def _resolve_event_id(db, event_name: str) -> int:
+def _resolve_event_name(db, event_name: str) -> str:
     """
-    Resolve or create an Event ID from event_name.
-    Defaults to 'General' if not provided.
+    Resolve or create an Event by name, returns the event name (string).
+    Defaults to 'Master' if not provided.
     """
     name = event_name or "Master"
     event = db.query(Event).filter(Event.name == name).first()
@@ -79,4 +79,4 @@ def _resolve_event_id(db, event_name: str) -> int:
         db.add(event)
         db.flush()
         logger.info(f"[DB] Created new Event '{name}'")
-    return event.id
+    return event.name
