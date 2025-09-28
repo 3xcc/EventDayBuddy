@@ -69,7 +69,7 @@ def run_bulk_import(file_bytes: bytes, triggered_by: str, event_name: str = None
             }
 
         # Step 2: Insert into DB (atomic transaction)
-    inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by, event_name=event_name)
+        inserted_ids = booking_ops.bulk_insert_bookings(valid_rows, triggered_by, event_name=event_name)
         logger.info(f"[Import] Inserted {len(inserted_ids)} bookings into DB for event '{event_name}'")
 
         # Step 2.5: Fetch authoritative records back from DB
