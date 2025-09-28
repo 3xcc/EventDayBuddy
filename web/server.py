@@ -7,6 +7,7 @@ from config.logger import logger
 from config.envs import LOG_LEVEL, TELEGRAM_TOKEN
 from bot.handlers import init_bot
 from telegram import Update
+from db.init import close_engine
 
 # Render sets PORT automatically; default to 8000 for local dev
 PORT = int(os.getenv("PORT", 8000))
@@ -47,15 +48,20 @@ async def startup_event():
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("[Web] FastAPI shutdown — cleaning up bot...")
+    logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
         from bot.handlers import application
-        if application:
+        if getattr(application, "running", False):
             await application.shutdown()
             await application.stop()
-            logger.info("[Shutdown] Bot application shut down cleanly.")
+            logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
+        else:
+            logger.warning("[Shutdown] ⚠️ Bot was already stopped.")
     except Exception as e:
-        logger.error(f"[Shutdown] Bot shutdown failed: {e}", exc_info=True)
+        logger.error(f"[Shutdown] ❌ Bot shutdown failed: {e}", exc_info=True)
+    finally:
+        # Always release DB connections
+        close_engine()
 
 
 # ===== Routes =====

@@ -153,10 +153,13 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("😴 Going to sleep now... shutting down gracefully.")
         logger.info(f"[Bot] /sleeptime triggered by admin {user_id}")
 
-        if application.running:
+        if getattr(application, "running", False):
+            # Correct order: shutdown first, then stop
+            await application.shutdown()
             await application.stop()
-        await application.shutdown()
-        logger.info("[Bot] Application stopped via /sleeptime")
+            logger.info("[Bot] ✅ Application stopped via /sleeptime")
+        else:
+            logger.warning("[Bot] ⚠️ Application was already stopped.")
 
     except Exception as e:
         log_and_raise("Bot", "handling /sleeptime command", e)

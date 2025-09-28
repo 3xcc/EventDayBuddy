@@ -72,3 +72,11 @@ def get_db():
         raise
     finally:
         db.close()
+
+def close_engine():
+    """Dispose of the engine and release all pooled connections."""
+    try:
+        engine.dispose()
+        logger.info("[DB] ✅ Engine disposed, all connections released.")
+    except Exception as e:
+        logger.error(f"[DB] ❌ Engine disposal failed: {e}", exc_info=True)
