@@ -173,7 +173,7 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # ===== Photo Handler =====
-@require_role(["booking_staff", "checkin_staff"])
+@require_role("booking_staff")
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     booking_id = context.user_data.get("awaiting_photo_for_booking")
     if not booking_id:
