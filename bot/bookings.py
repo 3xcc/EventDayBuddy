@@ -159,12 +159,14 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # If called as a command (not a callback), show help
     if update.message:
         await update.message.reply_text(
-            "📝 To attach an ID photo to a booking, first use the '📷 Attach ID Photo' button on a booking confirmation.\n"
-            "Then, send the photo in reply.\n\n"
-            "This command is only needed if you are responding to a booking's photo request."
+            "📝 To attach an ID photo to a booking, either:\n"
+            "1. Use the '📷 Attach ID Photo' button on a booking confirmation, OR\n"
+            "2. Run `/attachphoto <ID_NUMBER>` and then send the photo.\n\n"
+            "After that, send the ID photo in reply."
         )
         return
-    # CallbackQuery flow
+
+    # CallbackQuery flow (button pressed)
     query = update.callback_query
     await query.answer()
     booking_id = int(query.data.split(":")[1])
@@ -176,16 +178,40 @@ async def attach_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 @require_role("booking_staff")
 async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     booking_id = context.user_data.get("awaiting_photo_for_booking")
-    if not booking_id:
+    id_number_arg = None
+
+    # Support /attachphoto <ID_NUMBER>
+    if not booking_id and context.args:
+        id_number_arg = context.args[0].strip()
+
+    if not booking_id and not id_number_arg:
         await update.message.reply_text(
-            "❌ No booking is awaiting a photo. Please use the '📷 Attach ID Photo' button on a booking first."
+            "❌ No booking is awaiting a photo.\n"
+            "Use the '📷 Attach ID Photo' button or run `/attachphoto <ID_NUMBER>`."
         )
         return
 
     with get_db() as db:
-        booking = db.query(Booking).filter(Booking.id == booking_id).first()
-        if not booking:
-            return
+        if booking_id:
+            booking = db.query(Booking).filter(Booking.id == booking_id).first()
+        else:
+            matches = db.query(Booking).filter(Booking.id_number == id_number_arg).all()
+            if not matches:
+                await update.message.reply_text(f"❌ No booking found for ID {id_number_arg}")
+                return
+            if len(matches) > 1:
+                # Show ticket refs + names for disambiguation
+                lines = [
+                    f"- {b.ticket_ref}: {b.name} (event {b.event_id})"
+                    for b in matches
+                ]
+                await update.message.reply_text(
+                    f"⚠️ Multiple bookings found for ID {id_number_arg}:\n"
+                    + "\n".join(lines) +
+                    "\n\nPlease retry with `/attachphoto <TICKET_REF>`."
+                )
+                return
+            booking = matches[0]
 
         # Upload photo to Supabase
         file_url = await handle_photo_upload(update, booking.ticket_ref)
@@ -195,13 +221,13 @@ async def handle_booking_photo(update: Update, context: ContextTypes.DEFAULT_TYP
             db.refresh(booking)
 
             if not DRY_RUN:
-                # Update only the photo column in both tabs
                 update_booking_photo(booking.event_id, booking.ticket_ref, file_url)
 
             await update.message.reply_text(
-                f"✅ Photo attached to {booking.name} ({booking.ticket_ref})"
+                f"✅ Photo attached to {booking.name} "
+                f"(ID: {booking.id_number}, Ticket: {booking.ticket_ref})"
             )
-            logger.info(f"[Booking] Photo attached for {booking.name} ({booking.ticket_ref})")
+            logger.info(f"[Booking] Photo attached for {booking.name} ({booking.id_number}, {booking.ticket_ref})")
 
-    # Clear state
+    # Clear state if inline flow
     context.user_data.pop("awaiting_photo_for_booking", None)
