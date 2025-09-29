@@ -59,6 +59,9 @@ def upload_manifest(pdf_bytes: bytes, event_name: str, boat_number: str) -> str:
 
 def upload_idcard(pdf_bytes: bytes, event_name: str, ticket_ref: str) -> str:
     """Upload an ID card PDF under ids/<event>/idcards/<ticket>.pdf"""
+    if not pdf_bytes:
+        raise ValueError("upload_idcard received no PDF bytes")
+        
     if not pdf_bytes.startswith(b"%PDF"):
         raise ValueError("Invalid file type. Only PDF allowed.")
 

@@ -102,8 +102,12 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not DRY_RUN:
             manifest_path = upload_manifest(manifest_pdf, event_name=event_name, boat_number=str(boat_number))
-            idcards_path = upload_idcard(idcards_pdf, event_name=event_name, ticket_ref=f"boat_{boat_number}")
-            logger.info(f"[Departure] Uploaded manifest to {manifest_path} and ID cards to {idcards_path}")
+            if idcards_pdf:
+                idcards_path = upload_idcard(idcards_pdf, event_name=event_name, ticket_ref=f"boat_{boat_number}")
+                logger.info(f"[Departure] Uploaded manifest to {manifest_path} and ID cards to {idcards_path}")
+            else:
+                logger.warning(f"[Departure] No ID cards PDF generated for Boat {boat_number}")
+                idcards_path = None
 
         # Reply with summary + export buttons
         buttons = [
