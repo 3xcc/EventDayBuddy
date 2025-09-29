@@ -90,7 +90,7 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
         # Summary page
         c.showPage()
         current_page += 1
-        draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}", landscape_mode=True)
+        draw_header(c, f"Event: {event_name or 'Master'} | Boat: {boat_number}")
         c.setFont("Helvetica-Bold", 16)
         c.drawCentredString(page_width / 2, page_height / 2, f"Total ID Cards Generated: {len(rows)}")
         draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
