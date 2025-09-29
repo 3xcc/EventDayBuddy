@@ -130,11 +130,8 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             now = datetime.utcnow()
             if leg == "arrival":
                 booking.arrival_boat_boarded = session.boat_number
-                # Also update in master_row/event_row if you build them manually
-                master_row["ArrivalBoatBoarded"] = session.boat_number
             elif leg == "departure":
                 booking.departure_boat_boarded = session.boat_number
-                master_row["DepartureBoatBoarded"] = session.boat_number
 
             booking.status = "checked_in"
             booking.checkin_time = now
@@ -148,11 +145,6 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.add(checkin_log)
             db.commit()
             db.refresh(booking)
-
-            # Convert datetime fields to ISO strings for Sheets
-            def safe_datetime(dt):
-                return dt.isoformat() if isinstance(dt, datetime) else dt
-
 
             # Build rows for Sheets sync
             event_name = booking.event_id
@@ -172,6 +164,9 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "id_doc_url": booking.id_doc_url,
                 "group_id": booking.group_id,
                 "created_at": booking.created_at,
+                "ArrivalBoatBoarded": booking.arrival_boat_boarded,
+                "DepartureBoatBoarded": booking.departure_boat_boarded,
+                "checkin_time": booking.checkin_time,
             }
             master_row = build_master_row(booking_dict, event_name)
             event_row = build_event_row(master_row)
