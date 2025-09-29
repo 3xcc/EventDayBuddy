@@ -84,7 +84,13 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
             ]
             reply_markup = InlineKeyboardMarkup(buttons)
 
-            caption = f"👤 {booking.name}\nID: {booking.id_number}\nPhone: {booking.phone}"
+            caption = (
+                f"👤 {booking.name}\n"
+                f"ID: {booking.id_number}\n"
+                f"Phone: {booking.phone}\n"
+                f"Male Dep: {booking.male_dep or '-'}\n"
+                f"Resort Dep: {booking.resort_dep or '-'}"
+            )
             if booking.id_doc_url:
                 try:
                     photo_bytes = fetch_signed_file(booking.id_doc_url, expiry=60)

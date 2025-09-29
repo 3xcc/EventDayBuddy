@@ -4,6 +4,8 @@ from config.logger import logger, log_and_raise
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from utils.pdf_common import draw_header, draw_footer
+from db.init import get_db
+from db.models import Booking
 
 
 def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
@@ -13,9 +15,26 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
     Returns PDF as bytes.
     """
     try:
-        from sheets.manager import get_manifest_rows
+        # --- Query DB instead of Sheets ---
+        with get_db() as db:
+            q = db.query(Booking).filter(
+                (Booking.arrival_boat_boarded == boat_number) |
+                (Booking.departure_boat_boarded == boat_number)
+            )
+            if event_name:
+                q = q.filter(Booking.event_id == event_name)
+            bookings = q.all()
 
-        manifest = get_manifest_rows(boat_number, event_name=event_name)
+        manifest = []
+        for b in bookings:
+            manifest.append({
+                "Name": b.name,
+                "ID": b.id_number,
+                "Number": b.phone,
+                "ArrivalBoatBoarded": b.arrival_boat_boarded,
+                "DepartureBoatBoarded": b.departure_boat_boarded,
+            })
+
         logger.info(f"[PDF] Generating manifest PDF for Boat {boat_number} with {len(manifest)} passengers.")
 
         buffer = io.BytesIO()

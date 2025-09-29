@@ -3,9 +3,10 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from config.logger import logger
-from sheets.manager import get_manifest_rows
 from utils.supabase_storage import fetch_signed_file
 from utils.pdf_common import draw_header, draw_footer
+from db.init import get_db
+from db.models import Booking
 
 
 def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
@@ -17,7 +18,23 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
     and a summary page at the end.
     """
     try:
-        rows = get_manifest_rows(boat_number, event_name=event_name)
+        # --- Query DB instead of Sheets ---
+        with get_db() as db:
+            q = db.query(Booking).filter(
+                (Booking.arrival_boat_boarded == boat_number) |
+                (Booking.departure_boat_boarded == boat_number)
+            )
+            if event_name:
+                q = q.filter(Booking.event_id == event_name)
+            bookings = q.all()
+
+        rows = []
+        for b in bookings:
+            rows.append({
+                "Name": b.name,
+                "Number": b.phone,
+                "ID Doc URL": b.id_doc_url,
+            })
 
         buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=landscape(A4))
@@ -32,7 +49,7 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
         current_page = 1
 
         # First page header
-        draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}")
+        draw_header(c, f"Event: {event_name or 'Master'} | Boat: {boat_number}")
 
         for idx, row in enumerate(rows):
             col = idx % cols
@@ -42,7 +59,7 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
                 draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
                 c.showPage()
                 current_page += 1
-                draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}", landscape_mode=True)
+                draw_header(c, f"Event: {event_name or 'Master'} | Boat: {boat_number}")
 
             x = col * card_width
             y = page_height - (row_idx + 1) * card_height
@@ -85,7 +102,7 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
                 c.drawCentredString(x + card_width / 2, y + card_height / 2, "No Photo")
 
         # Footer for last card page
-        draw_footer(c, current_page, total_pages + 1)
+        draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
 
         # Summary page
         c.showPage()
