@@ -14,6 +14,8 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
     Shows only Name, ID number, Phone number, and Boarded Boat.
     Returns PDF as bytes.
     """
+    boat_number = int(boat_number)
+
     try:
         # --- Query DB instead of Sheets ---
         with get_db() as db:

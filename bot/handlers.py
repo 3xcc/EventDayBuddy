@@ -187,6 +187,8 @@ async def init_bot():
         app.add_handler(CommandHandler("unregister", unregister))
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
+        app.add_handler(CallbackQueryHandler(require_role("checkin_staff")(skip_checkin),pattern=r"^skip:\d+$"))
+
 
         # Bulk booking handlers
         bookings_bulk.register_handlers(app)
@@ -197,7 +199,9 @@ async def init_bot():
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
+        app.add_handler(CallbackQueryHandler(require_role("checkin_staff")(skip_checkin),pattern=r"^skip:\d+$"))
 
+        
         print("[DEBUG] Awaiting app.initialize()...")
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")

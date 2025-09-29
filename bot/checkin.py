@@ -80,7 +80,8 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
             # Prompt with photo + buttons
             buttons = [
                 [InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")],
-                [InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")]
+                [InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")],
+                [InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{booking.id}")]
             ]
             reply_markup = InlineKeyboardMarkup(buttons)
 
@@ -207,6 +208,39 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Checkin", "confirming boarding", e)
 
+@require_role("checkin_staff")
+async def skip_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+
+        parts = query.data.split(":")
+        booking_id = int(parts[1])
+        user_id = str(query.from_user.id)
+
+        with get_db() as db:
+            booking = db.query(Booking).filter(Booking.id == booking_id).first()
+            if not booking:
+                await query.edit_message_text("❌ Booking not found.")
+                return
+
+            # Log skip (optional, for audit trail)
+            skip_log = CheckinLog(
+                booking_id=booking.id,
+                boat_number=None,
+                confirmed_by=user_id,
+                method="skip"
+            )
+            db.add(skip_log)
+            db.commit()
+
+        await query.edit_message_text(
+            f"⏭️ Skipped {booking.name} ({booking.id_number}). Still available for check-in later."
+        )
+        logger.info(f"[Checkin] Skipped booking {booking.id} ({booking.name}) by {user_id}")
+
+    except Exception as e:
+        log_and_raise("Checkin", "skipping passenger", e)
 
 # ===== Handler registration =====
 def register_checkin_handlers(app):

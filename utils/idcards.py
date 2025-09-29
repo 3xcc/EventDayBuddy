@@ -17,6 +17,8 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
     Adds a header banner on each page, page footers with page numbers,
     and a summary page at the end.
     """
+    boat_number = int(boat_number)  
+    
     try:
         # --- Query DB instead of Sheets ---
         with get_db() as db:
