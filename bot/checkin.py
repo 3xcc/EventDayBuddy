@@ -251,3 +251,9 @@ def register_checkin_handlers(app):
             pattern=r"^confirm:(arrival|departure):\d+$"
         )
     )
+    app.add_handler
+        (CallbackQueryHandler(
+            require_role("checkin_staff")(skip_checkin),
+            pattern=r"^skip:\d+$"
+        )
+    )
