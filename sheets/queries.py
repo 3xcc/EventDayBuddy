@@ -68,4 +68,3 @@ def get_manifest_rows(boat_number: str, event_name: str = None):
 
 
 # In utils/idcards.py or wherever you call draw_header
-draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}")

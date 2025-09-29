@@ -32,7 +32,7 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
         current_page = 1
 
         # First page header
-        draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}", landscape_mode=True)
+        draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}")
 
         for idx, row in enumerate(rows):
             col = idx % cols
@@ -85,7 +85,7 @@ def generate_idcards_pdf(boat_number: str, event_name: str = None) -> bytes:
                 c.drawCentredString(x + card_width / 2, y + card_height / 2, "No Photo")
 
         # Footer for last card page
-        draw_footer(c, current_page, total_pages + 1, landscape_mode=True)
+        draw_footer(c, current_page, total_pages + 1)
 
         # Summary page
         c.showPage()
