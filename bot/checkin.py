@@ -149,7 +149,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.refresh(booking)
 
             # Build rows for Sheets sync
-            event_name = booking.event_name
+            event_name = booking.event_id
             booking_dict = {
                 "ticket_ref": booking.ticket_ref,
                 "name": booking.name,
