@@ -175,7 +175,16 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             master_row = build_master_row(booking_dict, event_name)
             event_row = build_event_row(master_row)
 
-            
+            def serialize_datetimes(row):
+                """Convert all datetime values in a dict or list to ISO strings."""
+                if isinstance(row, dict):
+                    return {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in row.items()}
+                elif isinstance(row, list):
+                    return [(v.isoformat() if isinstance(v, datetime) else v) for v in row]
+                return row
+
+            master_row = serialize_datetimes(master_row)
+            event_row = serialize_datetimes(event_row)
 
         # Push update to Sheets
         if not DRY_RUN:
@@ -184,9 +193,10 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
-        await query.edit_message_caption(
-            caption=f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
-        )
+        # Choose reply method: always send a new message
+        caption_text = f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
+        await query.message.reply_text(caption_text)
+
         logger.info(
             f"[Checkin] Booking {booking.id} {leg} check-in on Boat {session.boat_number} "
             f"by {user_id} (event={booking.event_id})"
