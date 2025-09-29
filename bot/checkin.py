@@ -130,10 +130,11 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             now = datetime.utcnow()
             if leg == "arrival":
                 booking.arrival_boat_boarded = session.boat_number
-                booking.arrival_time = now
+                # Also update in master_row/event_row if you build them manually
+                master_row["ArrivalBoatBoarded"] = session.boat_number
             elif leg == "departure":
                 booking.departure_boat_boarded = session.boat_number
-                booking.departure_time = now
+                master_row["DepartureBoatBoarded"] = session.boat_number
 
             booking.status = "checked_in"
             booking.checkin_time = now

@@ -65,3 +65,7 @@ def get_manifest_rows(boat_number: str, event_name: str = None):
 
     except Exception as e:
         log_and_raise("Sheets", f"getting manifest for boat {boat_number}", e)
+
+
+# In utils/idcards.py or wherever you call draw_header
+draw_header(c, f"Event: {event_name or 'General'} | Boat: {boat_number}")
