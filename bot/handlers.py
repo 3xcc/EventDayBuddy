@@ -187,7 +187,6 @@ async def init_bot():
         app.add_handler(CommandHandler("unregister", unregister))
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
-        app.add_handler(CallbackQueryHandler(require_role("checkin_staff")(skip_checkin),pattern=r"^skip:\d+$"))
 
 
         # Bulk booking handlers
