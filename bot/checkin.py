@@ -149,14 +149,9 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.refresh(booking)
 
             # Convert datetime fields to ISO strings for Sheets
-            def serialize_datetimes(d):
-                for k, v in d.items():
-                    if isinstance(v, datetime):
-                        d[k] = v.isoformat()
-                return d
+            def safe_datetime(dt):
+                return dt.isoformat() if isinstance(dt, datetime) else dt
 
-            master_row = serialize_datetimes(master_row)
-            event_row = serialize_datetimes(event_row)
 
             # Build rows for Sheets sync
             event_name = booking.event_id
