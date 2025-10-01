@@ -11,7 +11,11 @@ from bot.handlers import init_bot, application
 from db.init import close_engine
 
 # ===== Global State =====
-bot_ready = False  # Tracks bot readiness across lifecycle
+# Remove this duplicate declaration:
+# bot_ready = False  # ❌ DELETE THIS LINE
+
+# Instead, import from handlers where it's properly managed
+from bot.handlers import bot_ready
 
 # ===== Port and CORS =====
 PORT = int(os.getenv("PORT", 8000))
@@ -34,14 +38,13 @@ app.add_middleware(
 # ===== Startup Hook =====
 @app.on_event("startup")
 async def startup_event():
-    global bot_ready
+    # No need to declare global here since we're importing from handlers
     logger.info("[Web] FastAPI startup — initializing bot...")
     for attempt in range(3):
         try:
             print(f"[DEBUG] init_bot() attempt {attempt+1}")
             await init_bot()
-            await asyncio.sleep(1)  # ✅ Ensure dispatcher is bound before marking ready
-            bot_ready = True
+            # The bot_ready flag is now set within init_bot() in handlers.py
             logger.info("[Startup] ✅ Bot initialized successfully.")
             break
         except Exception as e:
@@ -53,25 +56,25 @@ async def startup_event():
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
 async def shutdown_event():
-    global bot_ready
-    bot_ready = False
+    # Import here to get the latest value
+    from bot.handlers import bot_ready
     logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
-        if application:
-            # For webhook mode, we only need to shutdown, not stop
+        if application and getattr(application, "running", False):
+            await application.stop()
             await application.shutdown()
-            await application.initialize()  # Cleanup
-            logger.info("[Shutdown] ✅ Bot application shutdown cleanly.")
+            logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
         else:
-            logger.warning("[Shutdown] ⚠️ Bot application was not initialized.")
+            logger.warning("[Shutdown] ⚠️ Bot was already stopped or not initialized.")
     except Exception as e:
         logger.error(f"[Shutdown] ❌ Bot shutdown failed: {e}", exc_info=True)
     finally:
         close_engine()
-        
+
 # ===== Health Check =====
 @app.get("/", tags=["Health"])
 def health_check():
+    from bot.handlers import bot_ready  # Import current value
     logger.info("[Web] Health check endpoint called.")
     return {
         "status": "ok",
@@ -83,10 +86,12 @@ def health_check():
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
     try:
-        if not bot_ready or not application or not getattr(application, "running", False):
+        from bot.handlers import bot_ready, application  # Import current values
+        
+        if not bot_ready or not application:
             logger.warning("[Webhook] Update dropped — bot not ready")
             return JSONResponse(
-                status_code=status.HTTP_200_OK,  # ✅ Avoid retry storm
+                status_code=status.HTTP_200_OK,
                 content={"ok": False, "dropped": True}
             )
 
