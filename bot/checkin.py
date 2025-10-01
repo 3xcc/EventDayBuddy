@@ -59,56 +59,322 @@ async def handle_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, met
                 return
             event_name = active_event_cfg.value
 
-            # Lookup booking
+            # === DIFFERENT LOGIC FOR ID vs PHONE ===
             if method == "id":
+                # Single booking lookup (existing logic)
                 booking = db.query(Booking).filter(
-                    Booking.status == "booked",
                     Booking.event_id == event_name,
                     Booking.id_number.ilike(f"%{query}%")
                 ).first()
-            else:
-                booking = db.query(Booking).filter(
-                    Booking.status == "booked",
+
+                if not booking:
+                    await update.message.reply_text(f"❌ No booking found for ID: {query}")
+                    return
+
+                await show_booking_selection(update, [booking], method)
+
+            else:  # method == "phone" - GROUP CHECK-IN
+                # Find all bookings with this phone number
+                bookings = db.query(Booking).filter(
                     Booking.event_id == event_name,
                     Booking.phone.ilike(f"%{query}%")
-                ).first()
+                ).all()
 
-            if not booking:
-                await update.message.reply_text(f"❌ No booking found for {method}: {query}")
-                return
+                if not bookings:
+                    await update.message.reply_text(f"❌ No bookings found for phone: {query}")
+                    return
 
-            # Prompt with photo + buttons
-            buttons = [
-                [InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")],
-                [InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")],
-                [InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{booking.id}")]
-            ]
-            reply_markup = InlineKeyboardMarkup(buttons)
-
-            caption = (
-                f"👤 {booking.name}\n"
-                f"ID: {booking.id_number}\n"
-                f"Phone: {booking.phone}\n"
-                f"Male Dep: {booking.male_dep or '-'}\n"
-                f"Resort Dep: {booking.resort_dep or '-'}"
-            )
-            if booking.id_doc_url:
-                try:
-                    photo_bytes = fetch_signed_file(booking.id_doc_url, expiry=60)
-                    await update.message.reply_photo(
-                        photo=io.BytesIO(photo_bytes),
-                        caption=caption,
-                        reply_markup=reply_markup
-                    )
-                except Exception as e:
-                    logger.warning(f"[Checkin] Failed to fetch photo for {booking.name}: {e}")
-                    await update.message.reply_text(caption + "\n(Photo unavailable)", reply_markup=reply_markup)
-            else:
-                await update.message.reply_text(caption + "\n(No photo available)", reply_markup=reply_markup)
+                # If only one booking, treat as single check-in
+                if len(bookings) == 1:
+                    await show_booking_selection(update, bookings, method)
+                else:
+                    # Multiple bookings - show group selection
+                    await show_group_selection(update, bookings, query)
 
     except Exception as e:
         log_and_raise("Checkin", f"handling /{method}", e)
 
+
+async def show_group_selection(update: Update, bookings: list, phone_number: str):
+    """Show group selection for multiple bookings with same phone number."""
+    try:
+        # Build selection buttons - one per passenger
+        buttons = []
+        for booking in bookings:
+            # Check which legs are needed for this passenger
+            needs_arrival = not booking.arrival_boat_boarded
+            needs_departure = not booking.departure_boat_boarded
+            
+            status_indicator = ""
+            if needs_arrival and needs_departure:
+                status_indicator = "❌"
+            elif needs_arrival or needs_departure:
+                status_indicator = "🟡"
+            else:
+                status_indicator = "✅"
+            
+            button_text = f"{status_indicator} {booking.name} (ID: {booking.id_number})"
+            buttons.append([InlineKeyboardButton(button_text, callback_data=f"select:{booking.id}")])
+
+        # Add group action buttons
+        group_buttons = []
+        if len(bookings) > 1:
+            # Only show "Check All" if at least one passenger needs check-in
+            needs_checkin = any(not b.arrival_boat_boarded or not b.departure_boat_boarded for b in bookings)
+            if needs_checkin:
+                group_buttons.append([InlineKeyboardButton("✅ Check All In", callback_data=f"group:all:{phone_number}")])
+        
+        group_buttons.append([InlineKeyboardButton("⏭️ Skip Group", callback_data=f"group:skip:{phone_number}")])
+        
+        if group_buttons:
+            buttons.extend(group_buttons)
+
+        reply_markup = InlineKeyboardMarkup(buttons)
+
+        group_info = f"📞 Group found for phone: {phone_number}\n"
+        group_info += f"👥 {len(bookings)} passenger(s) found:\n\n"
+        
+        for i, booking in enumerate(bookings, 1):
+            arrival_status = f"Boat {booking.arrival_boat_boarded}" if booking.arrival_boat_boarded else "Not checked in"
+            departure_status = f"Boat {booking.departure_boat_boarded}" if booking.departure_boat_boarded else "Not checked in"
+            group_info += f"{i}. {booking.name}\n"
+            group_info += f"   ID: {booking.id_number}\n"
+            group_info += f"   Arrival: {arrival_status}\n"
+            group_info += f"   Departure: {departure_status}\n\n"
+
+        group_info += "Select individual passengers or use group actions below."
+
+        await update.message.reply_text(group_info, reply_markup=reply_markup)
+
+    except Exception as e:
+        log_and_raise("Checkin", "showing group selection", e)
+
+
+async def show_booking_selection(update: Update, bookings: list, method: str):
+    """Show check-in options for single or selected booking(s)."""
+    try:
+        # For single booking or individual selection from group
+        booking = bookings[0]  # First booking in list
+        
+        # Check which legs are needed
+        needs_arrival = not booking.arrival_boat_boarded
+        needs_departure = not booking.departure_boat_boarded
+        
+        # If both legs are completed
+        if not needs_arrival and not needs_departure:
+            await update.message.reply_text(
+                f"✅ {booking.name} is already checked in for both arrival and departure.\n"
+                f"Arrival: Boat {booking.arrival_boat_boarded}\n"
+                f"Departure: Boat {booking.departure_boat_boarded}"
+            )
+            return
+
+        # Build appropriate buttons
+        buttons = []
+        if needs_arrival:
+            buttons.append([InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")])
+        if needs_departure:
+            buttons.append([InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")])
+        
+        buttons.append([InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{booking.id}")])
+        reply_markup = InlineKeyboardMarkup(buttons)
+
+        caption = (
+            f"👤 {booking.name}\n"
+            f"ID: {booking.id_number}\n"
+            f"Phone: {booking.phone}\n"
+            f"Male Dep: {booking.male_dep or '-'}\n"
+            f"Resort Dep: {booking.resort_dep or '-'}\n"
+        )
+        
+        # Show leg status
+        if booking.arrival_boat_boarded:
+            caption += f"Arrival: ✅ Boat {booking.arrival_boat_boarded}\n"
+        else:
+            caption += "Arrival: ❌ Not checked in\n"
+            
+        if booking.departure_boat_boarded:
+            caption += f"Departure: ✅ Boat {booking.departure_boat_boarded}"
+        else:
+            caption += "Departure: ❌ Not checked in"
+
+        # Handle photo display (existing logic)
+        if booking.id_doc_url:
+            try:
+                photo_bytes = fetch_signed_file(booking.id_doc_url, expiry=60)
+                await update.message.reply_photo(
+                    photo=io.BytesIO(photo_bytes),
+                    caption=caption,
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                logger.warning(f"[Checkin] Failed to fetch photo for {booking.name}: {e}")
+                await update.message.reply_text(caption + "\n(Photo unavailable)", reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(caption + "\n(No photo available)", reply_markup=reply_markup)
+
+    except Exception as e:
+        log_and_raise("Checkin", "showing booking selection", e)
+
+# ===== Group Selection Callback =====
+@require_role("checkin_staff")
+async def handle_group_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle group selection and group actions."""
+    try:
+        query = update.callback_query
+        await query.answer()
+
+        parts = query.data.split(":")
+        action = parts[1]
+        
+        if action == "all":  # Check All In
+            phone_number = parts[2]
+            await handle_group_checkin(update, context, phone_number, "all")
+        elif action == "skip":  # Skip Group
+            phone_number = parts[2]
+            await handle_group_skip(update, context, phone_number)
+        elif action.startswith("select"):  # Individual selection
+            booking_id = int(parts[1])
+            await handle_individual_selection(update, context, booking_id)
+
+    except Exception as e:
+        log_and_raise("Checkin", "handling group selection", e)
+
+
+async def handle_individual_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, booking_id: int):
+    """Show check-in options for individually selected passenger."""
+    with get_db() as db:
+        booking = db.query(Booking).filter(Booking.id == booking_id).first()
+        if not booking:
+            await update.callback_query.edit_message_text("❌ Booking not found.")
+            return
+
+    await show_booking_selection(update, [booking], "individual")
+
+
+async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str, action: str):
+    """Check in entire group or handle group actions."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+
+        with get_db() as db:
+            # Get all bookings for this phone number that need check-in
+            bookings = db.query(Booking).filter(
+                Booking.phone.ilike(f"%{phone_number}%")
+            ).all()
+
+            if not bookings:
+                await query.edit_message_text("❌ No bookings found for this group.")
+                return
+
+            # Check capacity before proceeding
+            session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
+            if not session:
+                await query.edit_message_text("⚠️ No active boat session.")
+                return
+
+            boat = db.query(Boat).filter(Boat.boat_number == session.boat_number).first()
+            if not boat:
+                await query.edit_message_text("❌ Boat not found.")
+                return
+
+            # Count current passengers
+            current_passenger_count = db.query(Booking).filter(
+                Booking.arrival_boat_boarded == session.boat_number,
+                Booking.status == "checked_in"
+            ).count()
+
+            # Count how many in this group need check-in
+            group_needs_checkin = [b for b in bookings if not b.arrival_boat_boarded or not b.departure_boat_boarded]
+            
+            if current_passenger_count + len(group_needs_checkin) > boat.capacity:
+                await query.edit_message_text(
+                    f"🚫 Boat {session.boat_number} doesn't have enough capacity for this group.\n"
+                    f"Current: {current_passenger_count}/{boat.capacity}\n"
+                    f"Group needs: {len(group_needs_checkin)} seats\n"
+                    f"Please ask admin to /editseats or check in passengers individually."
+                )
+                return
+
+            # Check in all passengers that need it
+            now = datetime.utcnow()
+            checked_in_count = 0
+
+            for booking in group_needs_checkin:
+                # Determine which legs to check in
+                needs_arrival = not booking.arrival_boat_boarded
+                needs_departure = not booking.departure_boat_boarded
+
+                if needs_arrival:
+                    booking.arrival_boat_boarded = session.boat_number
+                if needs_departure:
+                    booking.departure_boat_boarded = session.boat_number
+
+                booking.status = "checked_in"
+                booking.checkin_time = now
+
+                # Log check-in
+                legs_checked = []
+                if needs_arrival:
+                    legs_checked.append("arrival")
+                if needs_departure:
+                    legs_checked.append("departure")
+                
+                checkin_log = CheckinLog(
+                    booking_id=booking.id,
+                    boat_number=session.boat_number,
+                    confirmed_by=user_id,
+                    method=f"group-{'-'.join(legs_checked)}"
+                )
+                db.add(checkin_log)
+                checked_in_count += 1
+
+            db.commit()
+
+        await query.edit_message_text(
+            f"✅ Group check-in completed!\n"
+            f"📞 Phone: {phone_number}\n"
+            f"👥 Checked in: {checked_in_count} passenger(s)\n"
+            f"🛳 Boat: {session.boat_number}"
+        )
+
+        logger.info(f"[Checkin] Group check-in for phone {phone_number}: {checked_in_count} passengers by {user_id}")
+
+    except Exception as e:
+        log_and_raise("Checkin", "handling group check-in", e)
+
+
+async def handle_group_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
+    """Skip entire group."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+
+        with get_db() as db:
+            bookings = db.query(Booking).filter(Booking.phone.ilike(f"%{phone_number}%")).all()
+            
+            # Log skip for each booking
+            for booking in bookings:
+                skip_log = CheckinLog(
+                    booking_id=booking.id,
+                    boat_number=None,
+                    confirmed_by=user_id,
+                    method="group-skip"
+                )
+                db.add(skip_log)
+            
+            db.commit()
+
+        await query.edit_message_text(
+            f"⏭️ Skipped entire group for phone: {phone_number}\n"
+            f"👥 {len(bookings)} passenger(s) skipped"
+        )
+
+        logger.info(f"[Checkin] Skipped group for phone {phone_number}: {len(bookings)} passengers by {user_id}")
+
+    except Exception as e:
+        log_and_raise("Checkin", "skipping group", e)
 
 # ===== Confirm boarding callback =====
 @require_role("checkin_staff")
@@ -133,7 +399,47 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("⚠️ No active boat session.")
                 return
 
-            # Update booking
+            # === CAPACITY CHECK - NEW CODE ===
+            # Count current passengers on this boat for this leg
+            if leg == "arrival":
+                current_passenger_count = db.query(Booking).filter(
+                    Booking.arrival_boat_boarded == session.boat_number,
+                    Booking.status == "checked_in"
+                ).count()
+                boat_field = "arrival_boat_boarded"
+            else:  # departure
+                current_passenger_count = db.query(Booking).filter(
+                    Booking.departure_boat_boarded == session.boat_number,
+                    Booking.status == "checked_in"
+                ).count()
+                boat_field = "departure_boat_boarded"
+
+            # Get boat capacity
+            boat = db.query(Boat).filter(Boat.boat_number == session.boat_number).first()
+            if not boat:
+                await query.edit_message_text("❌ Boat not found in inventory.")
+                return
+
+            # Check if boat is full
+            if current_passenger_count >= boat.capacity:
+                await query.edit_message_text(
+                    f"🚫 Boat {session.boat_number} is now full ({current_passenger_count}/{boat.capacity}).\n"
+                    f"Please ask admin to /editseats or start /boatready with the next available boat."
+                )
+                return
+            # === END CAPACITY CHECK ===
+
+            # Update booking (existing code continues...)
+            now = datetime.utcnow()
+            if leg == "arrival":
+                booking.arrival_boat_boarded = session.boat_number
+            elif leg == "departure":
+                booking.departure_boat_boarded = session.boat_number
+
+            booking.status = "checked_in"
+            booking.checkin_time = now
+            
+           # Update booking
             now = datetime.utcnow()
             if leg == "arrival":
                 booking.arrival_boat_boarded = session.boat_number

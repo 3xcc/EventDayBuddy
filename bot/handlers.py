@@ -199,7 +199,7 @@ async def init_bot():
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
-        
+
         print("[DEBUG] Awaiting app.initialize()...")
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")
