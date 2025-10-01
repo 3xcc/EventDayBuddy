@@ -211,7 +211,7 @@ async def init_bot():
         print("[DEBUG] app.start() complete.")
 
         application = app
-        bot_ready = True  # ✅ Mark bot as ready for webhook processing
+        ## bot_ready = True  # ✅ Mark bot as ready for webhook processing
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
         print("[DEBUG] Bot application fully initialized.")
 
