@@ -300,6 +300,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
             # Check in all passengers that need it
             now = datetime.utcnow()
             checked_in_count = 0
+            sheets_updates = []  # Track bookings for Sheets update
 
             for booking in group_needs_checkin:
                 # Determine which legs to check in
@@ -329,8 +330,45 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 db.add(checkin_log)
                 checked_in_count += 1
+                
+                # Add to Sheets update list
+                sheets_updates.append(booking)
 
             db.commit()
+
+            # === SHEETS UPDATE FOR GROUP CHECK-IN - ADDED ===
+            if not DRY_RUN and sheets_updates:
+                for booking in sheets_updates:
+                    try:
+                        booking_dict = {
+                            "ticket_ref": booking.ticket_ref,
+                            "name": booking.name,
+                            "id_number": booking.id_number,
+                            "phone": booking.phone,
+                            "male_dep": booking.male_dep,
+                            "resort_dep": booking.resort_dep,
+                            "arrival_time": booking.arrival_time,
+                            "departure_time": booking.departure_time,
+                            "paid_amount": booking.paid_amount,
+                            "transfer_ref": booking.transfer_ref,
+                            "ticket_type": booking.ticket_type,
+                            "status": booking.status,
+                            "id_doc_url": booking.id_doc_url,
+                            "group_id": booking.group_id,
+                            "created_at": booking.created_at,
+                            "ArrivalBoatBoarded": booking.arrival_boat_boarded,
+                            "DepartureBoatBoarded": booking.departure_boat_boarded,
+                            "checkin_time": booking.checkin_time,
+                        }
+                        master_row = build_master_row(booking_dict, booking.event_id)
+                        event_row = build_event_row(master_row)
+                        
+                        master_row = serialize_datetimes(master_row)
+                        event_row = serialize_datetimes(event_row)
+                        
+                        update_booking(booking.event_id, master_row, event_row)
+                    except Exception as e:
+                        logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
         await query.edit_message_text(
             f"✅ Group check-in completed!\n"
@@ -343,7 +381,6 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
 
     except Exception as e:
         log_and_raise("Checkin", "handling group check-in", e)
-
 
 async def handle_group_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
     """Skip entire group."""
@@ -399,37 +436,31 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("⚠️ No active boat session.")
                 return
 
-            # === CAPACITY CHECK - NEW CODE ===
-            # Count current passengers on this boat for this leg
+            # === CAPACITY CHECK ===
             if leg == "arrival":
                 current_passenger_count = db.query(Booking).filter(
                     Booking.arrival_boat_boarded == session.boat_number,
                     Booking.status == "checked_in"
                 ).count()
-                boat_field = "arrival_boat_boarded"
             else:  # departure
                 current_passenger_count = db.query(Booking).filter(
                     Booking.departure_boat_boarded == session.boat_number,
                     Booking.status == "checked_in"
                 ).count()
-                boat_field = "departure_boat_boarded"
 
-            # Get boat capacity
             boat = db.query(Boat).filter(Boat.boat_number == session.boat_number).first()
             if not boat:
                 await query.edit_message_text("❌ Boat not found in inventory.")
                 return
 
-            # Check if boat is full
             if current_passenger_count >= boat.capacity:
                 await query.edit_message_text(
                     f"🚫 Boat {session.boat_number} is now full ({current_passenger_count}/{boat.capacity}).\n"
                     f"Please ask admin to /editseats or start /boatready with the next available boat."
                 )
                 return
-            # === END CAPACITY CHECK ===
 
-            # Update booking (existing code continues...)
+            # Update booking
             now = datetime.utcnow()
             if leg == "arrival":
                 booking.arrival_boat_boarded = session.boat_number
@@ -438,16 +469,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             booking.status = "checked_in"
             booking.checkin_time = now
-            
-           # Update booking
-            now = datetime.utcnow()
-            if leg == "arrival":
-                booking.arrival_boat_boarded = session.boat_number
-            elif leg == "departure":
-                booking.departure_boat_boarded = session.boat_number
 
-            booking.status = "checked_in"
-            booking.checkin_time = now
             # Log check-in
             checkin_log = CheckinLog(
                 booking_id=booking.id,
@@ -459,7 +481,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
             db.refresh(booking)
 
-            # Build rows for Sheets sync
+            # === SHEETS UPDATE - ADDED ===
             event_name = booking.event_id
             booking_dict = {
                 "ticket_ref": booking.ticket_ref,
