@@ -187,6 +187,7 @@ async def init_bot():
         app.add_handler(CommandHandler("unregister", unregister))
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
+        app.add_handler(CommandHandler("resetbooking", reset_booking))
 
 
         # Bulk booking handlers
