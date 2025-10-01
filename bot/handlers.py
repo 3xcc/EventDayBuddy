@@ -27,6 +27,7 @@ from db.models import User, Config
 
 # Global application instance so FastAPI route can access it
 application = None
+bot_ready = False  # ✅ Used by /health endpoint
 
 # ===== Command Handlers =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -122,7 +123,6 @@ async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_
             active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
             event_name = active_event_cfg.value if active_event_cfg else "General"
 
-        # ✅ Fix path to align with supabase_storage.upload_idcard convention
         path = f"ids/{event_name}/idcards/boat_{boat_number}.pdf"
         pdf_bytes = fetch_signed_file(path)
 
@@ -153,8 +153,7 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("😴 Going to sleep now... shutting down gracefully.")
         logger.info(f"[Bot] /sleeptime triggered by admin {user_id}")
 
-        if getattr(application, "running", False):
-            # Correct order: stop first, then shutdown
+        if application and getattr(application, "running", False):
             await application.stop()
             await application.shutdown()
             logger.info("[Bot] ✅ Application stopped via /sleeptime")
@@ -164,9 +163,10 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Bot", "handling /sleeptime command", e)
 
+
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
-    global application
+    global application, bot_ready
     import traceback
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
@@ -188,7 +188,6 @@ async def init_bot():
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
 
-
         # Bulk booking handlers
         bookings_bulk.register_handlers(app)
 
@@ -198,7 +197,6 @@ async def init_bot():
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
-
 
         print("[DEBUG] Awaiting app.initialize()...")
         await app.initialize()
@@ -221,6 +219,7 @@ async def init_bot():
         print("[DEBUG] app.start() complete.")
 
         application = app
+        bot_ready = True  # ✅ Mark bot as ready for health check
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
         print("[DEBUG] Bot application fully initialized.")
 

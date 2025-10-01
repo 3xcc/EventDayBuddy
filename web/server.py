@@ -1,11 +1,11 @@
 import os
-import sys
+import asyncio
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from config.logger import logger
 from config.envs import LOG_LEVEL, TELEGRAM_TOKEN
-from bot.handlers import init_bot
+from bot.handlers import init_bot, application, bot_ready
 from telegram import Update
 from db.init import close_engine
 
@@ -33,53 +33,50 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     logger.info("[Web] FastAPI startup — initializing bot...")
-    import traceback
-    try:
-        print("[DEBUG] Calling init_bot()...")
-        await init_bot()
-        logger.info("[Startup] Bot initialized successfully.")
-        print("[DEBUG] init_bot() completed successfully.")
-    except Exception as e:
-        logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
-        print("[DEBUG] Exception in startup_event:", e)
-        traceback.print_exc()
-        # sys.exit(1)
+    for attempt in range(3):
+        try:
+            print(f"[DEBUG] init_bot() attempt {attempt+1}")
+            await init_bot()
+            logger.info("[Startup] Bot initialized successfully.")
+            break
+        except Exception as e:
+            logger.error(f"[Startup] Bot init failed (attempt {attempt+1}): {e}", exc_info=True)
+            await asyncio.sleep(2 * attempt)
+    else:
+        logger.critical("[Startup] Bot failed to initialize after retries.")
 
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
 async def shutdown_event():
+    bot_ready = False  # ✅ Mark bot as not ready
     logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
-        from bot.handlers import application
-        if getattr(application, "running", False):
-            # Correct order: stop first, then shutdown
+        if application and getattr(application, "running", False):
             await application.stop()
             await application.shutdown()
             logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
         else:
-            logger.warning("[Shutdown] ⚠️ Bot was already stopped.")
+            logger.warning("[Shutdown] ⚠️ Bot was already stopped or not initialized.")
     except Exception as e:
         logger.error(f"[Shutdown] ❌ Bot shutdown failed: {e}", exc_info=True)
     finally:
-        # Always release DB connections
         close_engine()
 
 # ===== Routes =====
 @app.get("/", tags=["Health"])
-@app.get("/health", tags=["Health"])
 def health_check():
-    """Basic health check endpoint for uptime monitoring."""
     logger.info("[Web] Health check endpoint called.")
-    return {"status": "ok", "message": "EventDayBuddy is running"}
+    return {
+        "status": "ok",
+        "message": "EventDayBuddy is running",
+        "bot_ready": bot_ready
+    }
 
 # ===== Telegram Webhook =====
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
-    """Endpoint for Telegram to POST updates to."""
     try:
-        from bot.handlers import application
-
-        if application is None:
+        if not application or not getattr(application, "running", False):
             logger.error("[Webhook] Bot application not initialized — update dropped.")
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
