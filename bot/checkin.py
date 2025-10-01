@@ -281,8 +281,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Count current passengers
             current_passenger_count = db.query(Booking).filter(
-                Booking.arrival_boat_boarded == session.boat_number,
-                Booking.status == "checked_in"
+                Booking.arrival_boat_boarded == session.boat_number
             ).count()
 
             # Count how many in this group need check-in
@@ -300,7 +299,6 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
             # Check in all passengers that need it
             now = datetime.utcnow()
             checked_in_count = 0
-            sheets_updates = []  # Track bookings for Sheets update
 
             for booking in group_needs_checkin:
                 # Determine which legs to check in
@@ -330,45 +328,8 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 db.add(checkin_log)
                 checked_in_count += 1
-                
-                # Add to Sheets update list
-                sheets_updates.append(booking)
 
             db.commit()
-
-            # === SHEETS UPDATE FOR GROUP CHECK-IN - ADDED ===
-            if not DRY_RUN and sheets_updates:
-                for booking in sheets_updates:
-                    try:
-                        booking_dict = {
-                            "ticket_ref": booking.ticket_ref,
-                            "name": booking.name,
-                            "id_number": booking.id_number,
-                            "phone": booking.phone,
-                            "male_dep": booking.male_dep,
-                            "resort_dep": booking.resort_dep,
-                            "arrival_time": booking.arrival_time,
-                            "departure_time": booking.departure_time,
-                            "paid_amount": booking.paid_amount,
-                            "transfer_ref": booking.transfer_ref,
-                            "ticket_type": booking.ticket_type,
-                            "status": booking.status,
-                            "id_doc_url": booking.id_doc_url,
-                            "group_id": booking.group_id,
-                            "created_at": booking.created_at,
-                            "ArrivalBoatBoarded": booking.arrival_boat_boarded,
-                            "DepartureBoatBoarded": booking.departure_boat_boarded,
-                            "checkin_time": booking.checkin_time,
-                        }
-                        master_row = build_master_row(booking_dict, booking.event_id)
-                        event_row = build_event_row(master_row)
-                        
-                        master_row = serialize_datetimes(master_row)
-                        event_row = serialize_datetimes(event_row)
-                        
-                        update_booking(booking.event_id, master_row, event_row)
-                    except Exception as e:
-                        logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
         await query.edit_message_text(
             f"✅ Group check-in completed!\n"
@@ -383,7 +344,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
         log_and_raise("Checkin", "handling group check-in", e)
 
 async def handle_group_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
-    """Skip entire group."""
+    """Skip entire group - no database changes, just UI feedback."""
     try:
         query = update.callback_query
         user_id = str(query.from_user.id)
@@ -391,27 +352,47 @@ async def handle_group_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         with get_db() as db:
             bookings = db.query(Booking).filter(Booking.phone.ilike(f"%{phone_number}%")).all()
             
-            # Log skip for each booking
-            for booking in bookings:
-                skip_log = CheckinLog(
-                    booking_id=booking.id,
-                    boat_number=None,
-                    confirmed_by=user_id,
-                    method="group-skip"
-                )
-                db.add(skip_log)
-            
-            db.commit()
+            # NO database changes for skip actions
+            # Just get the count and log for audit
+            logger.info(f"[Checkin] Skipped group for phone {phone_number}: {len(bookings)} passengers by {user_id}")
 
         await query.edit_message_text(
             f"⏭️ Skipped entire group for phone: {phone_number}\n"
-            f"👥 {len(bookings)} passenger(s) skipped"
+            f"👥 {len(bookings)} passenger(s) skipped\n"
+            f"📝 They can still be checked in later using /p {phone_number}"
         )
-
-        logger.info(f"[Checkin] Skipped group for phone {phone_number}: {len(bookings)} passengers by {user_id}")
 
     except Exception as e:
         log_and_raise("Checkin", "skipping group", e)
+
+@require_role("checkin_staff")
+async def skip_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Skip individual passenger - no CheckinLog records created."""
+    try:
+        query = update.callback_query
+        await query.answer()
+
+        parts = query.data.split(":")
+        booking_id = int(parts[1])
+        user_id = str(query.from_user.id)
+
+        with get_db() as db:
+            booking = db.query(Booking).filter(Booking.id == booking_id).first()
+            if not booking:
+                await query.edit_message_text("❌ Booking not found.")
+                return
+
+            # NO CheckinLog records created for skip actions
+            # Just log the skip action for audit purposes
+            logger.info(f"[Checkin] Skipped booking {booking.id} ({booking.name}) by {user_id}")
+
+        await query.edit_message_text(
+            f"⏭️ Skipped {booking.name} ({booking.id_number}). Still available for check-in later."
+        )
+
+    except Exception as e:
+        log_and_raise("Checkin", "skipping passenger", e)
+
 
 # ===== Confirm boarding callback =====
 @require_role("checkin_staff")
@@ -436,16 +417,16 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("⚠️ No active boat session.")
                 return
 
-            # === CAPACITY CHECK ===
+            # === FIXED CAPACITY CHECK ===
             if leg == "arrival":
+                # Count bookings with arrival on THIS boat (regardless of status)
                 current_passenger_count = db.query(Booking).filter(
-                    Booking.arrival_boat_boarded == session.boat_number,
-                    Booking.status == "checked_in"
+                    Booking.arrival_boat_boarded == session.boat_number
                 ).count()
             else:  # departure
+                # Count bookings with departure on THIS boat (regardless of status)
                 current_passenger_count = db.query(Booking).filter(
-                    Booking.departure_boat_boarded == session.boat_number,
-                    Booking.status == "checked_in"
+                    Booking.departure_boat_boarded == session.boat_number
                 ).count()
 
             boat = db.query(Boat).filter(Boat.boat_number == session.boat_number).first()
@@ -460,17 +441,24 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            # Update booking
+            # === UPDATE ONLY THE SELECTED LEG ===
             now = datetime.utcnow()
+            
             if leg == "arrival":
+                # Only update arrival boat
                 booking.arrival_boat_boarded = session.boat_number
+                leg_text = "Arrival"
             elif leg == "departure":
+                # Only update departure boat  
                 booking.departure_boat_boarded = session.boat_number
+                leg_text = "Departure"
 
-            booking.status = "checked_in"
-            booking.checkin_time = now
+            # Update status to checked_in only if at least one leg is completed
+            if booking.arrival_boat_boarded or booking.departure_boat_boarded:
+                booking.status = "checked_in"
+                booking.checkin_time = now
 
-            # Log check-in
+            # Log check-in for the specific leg only
             checkin_log = CheckinLog(
                 booking_id=booking.id,
                 boat_number=session.boat_number,
@@ -481,7 +469,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
             db.refresh(booking)
 
-            # === SHEETS UPDATE - ADDED ===
+            # === SHEETS UPDATE ===
             event_name = booking.event_id
             booking_dict = {
                 "ticket_ref": booking.ticket_ref,
@@ -524,8 +512,17 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.error(f"[Sheets] Failed to update booking {booking.id} in Sheets: {e}")
 
-        # Choose reply method: always send a new message
-        caption_text = f"✅ {booking.name} checked in for {leg.capitalize()} Boat {session.boat_number}."
+        # Show updated status
+        arrival_status = f"✅ Boat {booking.arrival_boat_boarded}" if booking.arrival_boat_boarded else "❌ Not checked in"
+        departure_status = f"✅ Boat {booking.departure_boat_boarded}" if booking.departure_boat_boarded else "❌ Not checked in"
+        
+        caption_text = (
+            f"✅ {booking.name} checked in for {leg_text} Boat {session.boat_number}.\n\n"
+            f"Current Status:\n"
+            f"🛬 Arrival: {arrival_status}\n"
+            f"🛫 Departure: {departure_status}"
+        )
+        
         await query.message.reply_text(caption_text)
 
         logger.info(
@@ -536,8 +533,12 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log_and_raise("Checkin", "confirming boarding", e)
 
+
+# ===== Skip check-in callback =====
+
 @require_role("checkin_staff")
 async def skip_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Skip individual passenger - no database changes, just UI feedback."""
     try:
         query = update.callback_query
         await query.answer()
@@ -552,25 +553,81 @@ async def skip_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("❌ Booking not found.")
                 return
 
-            # Log skip (optional, for audit trail)
-            skip_log = CheckinLog(
-                booking_id=booking.id,
-                boat_number=None,
-                confirmed_by=user_id,
-                method="skip"
-            )
-            db.add(skip_log)
-            db.commit()
+            # NO database changes for skip actions
+            # Just log for audit
+            logger.info(f"[Checkin] Skipped booking {booking.id} ({booking.name}) by {user_id}")
 
         await query.edit_message_text(
             f"⏭️ Skipped {booking.name} ({booking.id_number}). Still available for check-in later."
         )
-        logger.info(f"[Checkin] Skipped booking {booking.id} ({booking.name}) by {user_id}")
 
     except Exception as e:
         log_and_raise("Checkin", "skipping passenger", e)
 
+# ===== Reset Booking Command =====
+@require_role("admin")
+async def reset_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reset a booking's check-in status (admin only)."""
+    try:
+        if not context.args:
+            await update.message.reply_text(
+                "Usage: /resetbooking <ID_Number_or_Ticket_Ref>\n\n"
+                "This will reset both arrival and departure check-ins for the booking."
+            )
+            return
+
+        identifier = context.args[0].strip()
+        user_id = str(update.effective_user.id)
+
+        with get_db() as db:
+            # Try ticket_ref first, then id_number
+            booking = db.query(Booking).filter(Booking.ticket_ref == identifier).first()
+            if not booking:
+                booking = db.query(Booking).filter(Booking.id_number == identifier).first()
+            
+            if not booking:
+                await update.message.reply_text(f"❌ No booking found for: {identifier}")
+                return
+
+            # Store old values for logging
+            old_arrival = booking.arrival_boat_boarded
+            old_departure = booking.departure_boat_boarded
+            old_status = booking.status
+
+            # Reset check-in data
+            booking.arrival_boat_boarded = None
+            booking.departure_boat_boarded = None
+            booking.status = "booked"
+            booking.checkin_time = None
+
+            # Log the reset action
+            reset_log = CheckinLog(
+                booking_id=booking.id,
+                boat_number=None,
+                confirmed_by=user_id,
+                method="admin-reset"
+            )
+            db.add(reset_log)
+            db.commit()
+
+        await update.message.reply_text(
+            f"🔄 Booking reset for: {booking.name}\n"
+            f"🆔: {booking.id_number}\n"
+            f"🎫: {booking.ticket_ref}\n\n"
+            f"Reset from:\n"
+            f"Arrival: {f'Boat {old_arrival}' if old_arrival else 'Not checked in'} → ❌\n"
+            f"Departure: {f'Boat {old_departure}' if old_departure else 'Not checked in'} → ❌\n"
+            f"Status: {old_status} → booked"
+        )
+
+        logger.info(f"[Checkin] Booking {booking.id} reset by admin {user_id}")
+
+    except Exception as e:
+        log_and_raise("Checkin", "resetting booking", e)
+        
 # ===== Handler registration =====
+
+
 def register_checkin_handlers(app):
     """Register all check-in related handlers on the bot application."""
     app.add_handler(
