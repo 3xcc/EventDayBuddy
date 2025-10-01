@@ -297,7 +297,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
 
             # Check in all passengers that need it
-            now = datetime.utcnow()
+            now = datetime.now()
             checked_in_count = 0
 
             for booking in group_needs_checkin:
@@ -442,7 +442,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             # === UPDATE ONLY THE SELECTED LEG ===
-            now = datetime.utcnow()
+            now = datetime.now()
             
             if leg == "arrival":
                 # Only update arrival boat

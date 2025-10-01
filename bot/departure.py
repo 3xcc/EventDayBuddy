@@ -11,8 +11,6 @@ from utils.supabase_storage import upload_manifest, upload_idcard
 from sqlalchemy.exc import OperationalError
 from bot.utils.roles import require_role
 
-
-
 # ===== /departed Command =====
 @require_role("admin")
 async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,7 +31,11 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Boat number must be a positive integer.")
             return
 
-        departure_time = datetime.utcnow()
+        # Use local time for GMT+5 (Maldives time)
+        departure_time = datetime.now()  # Changed from utcnow() to now()
+        
+        # Format for display in Maldives time
+        departure_display = departure_time.strftime('%Y-%m-%d %H:%M') + " (GMT+5)"
 
         with get_db() as db:
             try:
@@ -117,11 +119,11 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(buttons)
 
         await update.message.reply_text(
-            f"🛥️ Boat {boat_number} departed at {departure_time.strftime('%H:%M')}.\n\n"
+            f"🛥️ Boat {boat_number} departed at {departure_display}.\n\n"  # Use local time display
             f"{manifest_text}",
             reply_markup=reply_markup
         )
-        logger.info(f"[Departure] Boat {boat_number} marked as departed and manifest export triggered.")
+        logger.info(f"[Departure] Boat {boat_number} marked as departed at {departure_display}")
 
     except Exception as e:
         log_and_raise("Departure", "running /departed", e)
