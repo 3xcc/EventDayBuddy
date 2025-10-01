@@ -56,21 +56,22 @@ async def startup_event():
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
 async def shutdown_event():
-    # Import here to get the latest value
-    from bot.handlers import bot_ready
+    from bot.handlers import bot_ready, application
+    bot_ready = False
     logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
-        if application and getattr(application, "running", False):
-            await application.stop()
+        if application:
+            # Proper shutdown for webhook mode
             await application.shutdown()
+            await application.stop()
             logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
         else:
-            logger.warning("[Shutdown] ⚠️ Bot was already stopped or not initialized.")
+            logger.warning("[Shutdown] ⚠️ Bot application was not initialized.")
     except Exception as e:
         logger.error(f"[Shutdown] ❌ Bot shutdown failed: {e}", exc_info=True)
     finally:
         close_engine()
-
+        
 # ===== Health Check =====
 @app.get("/", tags=["Health"])
 def health_check():
@@ -83,10 +84,11 @@ def health_check():
     }
 
 # ===== Telegram Webhook =====
+# ===== Telegram Webhook =====
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
     try:
-        from bot.handlers import bot_ready, application  # Import current values
+        from bot.handlers import bot_ready, application
         
         if not bot_ready or not application:
             logger.warning("[Webhook] Update dropped — bot not ready")
@@ -99,7 +101,9 @@ async def telegram_webhook(request: Request):
         logger.info(f"[Webhook] 📩 Incoming update from {request.client.host}")
 
         update = Update.de_json(data, application.bot)
-        await application.update_queue.put(update)
+        
+        # ✅ CRITICAL: Use application.process_update() instead of putting in queue
+        await application.process_update(update)
 
         return JSONResponse(status_code=status.HTTP_200_OK, content={"ok": True})
 

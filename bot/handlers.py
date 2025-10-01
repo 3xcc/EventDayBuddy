@@ -156,13 +156,15 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_and_raise("Bot", "handling /sleeptime command", e)
 
 # ===== Bot Initializer for Webhook Mode =====
-
+# ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
-    global application, bot_ready  # ✅ Add bot_ready to global declaration
+    global application, bot_ready
     import traceback
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
         print("[DEBUG] Building Application...")
+        
+        # ✅ Use ApplicationBuilder with webhook settings
         app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
         # Register commands
@@ -192,10 +194,16 @@ async def init_bot():
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")
 
-        application = app  # ✅ Share application globally
-        bot_ready = True  # ✅ CRITICAL: Set the flag after successful initialization
+        # ✅ CRITICAL: For webhook mode, we need to start the application
+        # but not with polling. We start it to process the update queue.
+        print("[DEBUG] Starting application for webhook processing...")
+        await app.start()
+        print("[DEBUG] app.start() complete for webhook mode.")
 
-        # ✅ Set webhook without starting the polling loop
+        application = app
+        bot_ready = True
+
+        # ✅ Set webhook
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         print(f"[DEBUG] Webhook URL: {webhook_url}")
         if not webhook_url.startswith("https://"):
@@ -210,5 +218,5 @@ async def init_bot():
     except Exception as e:
         print("[DEBUG] Exception in init_bot:", e)
         traceback.print_exc()
-        bot_ready = False  # ✅ Ensure flag is false on failure
+        bot_ready = False
         log_and_raise("Bot Init", "initializing Telegram bot", e)
