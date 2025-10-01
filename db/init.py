@@ -1,11 +1,10 @@
 import time
-from sqlalchemy import create_engine, text   # ✅ import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from config.logger import logger, log_and_raise
 from config.envs import DB_URL, LOG_LEVEL
 from db.models import Base
-
 
 # ===== Engine creation with retry/backoff =====
 def init_engine_with_retry(url: str, retries: int = 5, backoff: int = 2):
@@ -20,7 +19,7 @@ def init_engine_with_retry(url: str, retries: int = 5, backoff: int = 2):
                 max_overflow=0,
                 pool_pre_ping=True,
                 echo=(LOG_LEVEL == "DEBUG"),
-)
+            )
             # ✅ test connection immediately using SQLAlchemy 2.0 style
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -34,26 +33,26 @@ def init_engine_with_retry(url: str, retries: int = 5, backoff: int = 2):
             logger.warning(f"[DB] Connection failed (attempt {attempt}), retrying in {wait}s...")
             time.sleep(wait)
 
-
 # ===== Create engine and session factory =====
 engine = init_engine_with_retry(DB_URL)
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
-    expire_on_commit=False,  # ✅ keep attributes after commit
+    expire_on_commit=False,
 )
 
-
-# ===== Initialize tables =====
+# ===== Initialize tables safely =====
 def init_db():
     """Create all tables if they do not exist."""
     try:
-        Base.metadata.create_all(bind=engine)
+        # ✅ Use engine.connect() to avoid session contamination
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))  # optional ping
+            Base.metadata.create_all(bind=conn)
         logger.info("[DB] ✅ Tables created or verified.")
     except Exception as e:
         log_and_raise("DB Init", "creating tables", e)
-
 
 # ===== Context manager for DB sessions =====
 @contextmanager
@@ -65,9 +64,9 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-        db.commit()        # ✅ commit if no exception
+        db.commit()
     except Exception as e:
-        db.rollback()      # ✅ rollback on error
+        db.rollback()
         logger.error(f"[DB] ❌ Transaction rolled back due to error: {e}", exc_info=True)
         raise
     finally:

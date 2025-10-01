@@ -1,26 +1,32 @@
 import os
-import sys
-from fastapi.responses import JSONResponse
+import asyncio
 from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from telegram import Update
+
 from config.logger import logger
 from config.envs import LOG_LEVEL, TELEGRAM_TOKEN
-from bot.handlers import init_bot
-from telegram import Update
+from bot.handlers import init_bot, application
 from db.init import close_engine
 
-# Render sets PORT automatically; default to 8000 for local dev
-PORT = int(os.getenv("PORT", 8000))
+# ===== Global State =====
+# Remove this duplicate declaration:
+# bot_ready = False  # ❌ DELETE THIS LINE
 
-# Allow all origins in dev, restrict in prod
+# Instead, import from handlers where it's properly managed
+from bot.handlers import bot_ready
+
+# ===== Port and CORS =====
+PORT = int(os.getenv("PORT", 8000))
 ALLOWED_ORIGINS = (
     ["*"] if os.getenv("ENV", "dev") == "dev"
     else os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
 )
 
+# ===== FastAPI App =====
 app = FastAPI(title="EventDayBuddy API", version="1.0.0")
 
-# ===== Middleware =====
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -32,70 +38,77 @@ app.add_middleware(
 # ===== Startup Hook =====
 @app.on_event("startup")
 async def startup_event():
+    # No need to declare global here since we're importing from handlers
     logger.info("[Web] FastAPI startup — initializing bot...")
-    import traceback
-    try:
-        print("[DEBUG] Calling init_bot()...")
-        await init_bot()
-        logger.info("[Startup] Bot initialized successfully.")
-        print("[DEBUG] init_bot() completed successfully.")
-    except Exception as e:
-        logger.error(f"[Startup] Bot init failed: {e}", exc_info=True)
-        print("[DEBUG] Exception in startup_event:", e)
-        traceback.print_exc()
-        # sys.exit(1)
+    for attempt in range(3):
+        try:
+            print(f"[DEBUG] init_bot() attempt {attempt+1}")
+            await init_bot()
+            # The bot_ready flag is now set within init_bot() in handlers.py
+            logger.info("[Startup] ✅ Bot initialized successfully.")
+            break
+        except Exception as e:
+            logger.error(f"[Startup] ❌ Bot init failed (attempt {attempt+1}): {e}", exc_info=True)
+            await asyncio.sleep(2 * attempt)
+    else:
+        logger.critical("[Startup] ❌ Bot failed to initialize after retries.")
 
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
 async def shutdown_event():
+    from bot.handlers import bot_ready, application
+    bot_ready = False
     logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
-        from bot.handlers import application
-        if getattr(application, "running", False):
-            # Correct order: stop first, then shutdown
-            await application.stop()
+        if application:
+            # Proper shutdown for webhook mode
             await application.shutdown()
+            await application.stop()
             logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
         else:
-            logger.warning("[Shutdown] ⚠️ Bot was already stopped.")
+            logger.warning("[Shutdown] ⚠️ Bot application was not initialized.")
     except Exception as e:
         logger.error(f"[Shutdown] ❌ Bot shutdown failed: {e}", exc_info=True)
     finally:
-        # Always release DB connections
         close_engine()
-
-# ===== Routes =====
+        
+# ===== Health Check =====
 @app.get("/", tags=["Health"])
-@app.get("/health", tags=["Health"])
 def health_check():
-    """Basic health check endpoint for uptime monitoring."""
+    from bot.handlers import bot_ready  # Import current value
     logger.info("[Web] Health check endpoint called.")
-    return {"status": "ok", "message": "EventDayBuddy is running"}
+    return {
+        "status": "ok",
+        "message": "EventDayBuddy is running",
+        "bot_ready": bot_ready
+    }
 
+# ===== Telegram Webhook =====
 # ===== Telegram Webhook =====
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
-    """Endpoint for Telegram to POST updates to."""
     try:
-        from bot.handlers import application
-
-        if application is None:
-            logger.error("[Webhook] Bot application not initialized — update dropped.")
+        from bot.handlers import bot_ready, application
+        
+        if not bot_ready or not application:
+            logger.warning("[Webhook] Update dropped — bot not ready")
             return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"ok": False, "error": "Bot not initialized"},
+                status_code=status.HTTP_200_OK,
+                content={"ok": False, "dropped": True}
             )
 
         data = await request.json()
-        logger.info(f"[Webhook] Incoming update from {request.client.host}")
+        logger.info(f"[Webhook] 📩 Incoming update from {request.client.host}")
 
         update = Update.de_json(data, application.bot)
-        await application.update_queue.put(update)
+        
+        # ✅ CRITICAL: Use application.process_update() instead of putting in queue
+        await application.process_update(update)
 
         return JSONResponse(status_code=status.HTTP_200_OK, content={"ok": True})
 
     except Exception as e:
-        logger.exception("[Webhook] Failed to process update")
+        logger.exception("[Webhook] ❌ Failed to process update")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"ok": False, "error": str(e)},

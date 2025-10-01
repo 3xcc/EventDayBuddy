@@ -1,4 +1,3 @@
-# ===== RunTests Command (Admin Only) =====
 import subprocess
 import tempfile
 import os
@@ -27,10 +26,10 @@ from db.models import User, Config
 
 # Global application instance so FastAPI route can access it
 application = None
+bot_ready = False  # ✅ Used by /health endpoint
 
 # ===== Command Handlers =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dynamic /start command — shows role-based help menu."""
     try:
         user_id = str(update.effective_user.id)
         with get_db() as db:
@@ -48,35 +47,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• /checkinmode — Enable check-in mode\n"
                 "• /editseats — Adjust boat capacity\n"
                 "• /departed — Mark boat departed\n"
-                "• /newbooking — Add a single booking (with optional ID photo)\n"
-                "• /editbooking — Search and edit bookings by ID or ticket_ref\n"
-                "• /newbookings [EventName] — Bulk import bookings from CSV/XLS (attach file)\n"
-                "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
+                "• /newbooking — Add a single booking\n"
+                "• /editbooking — Search and edit bookings\n"
+                "• /newbookings [EventName] — Bulk import bookings\n"
+                "• /attachphoto — Attach an ID photo\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
                 "• /sleeptime — Gracefully shut down the bot\n"
-                "• /start — Show this help menu\n\n"
-                "Staff can be assigned roles: admin, booking_staff, checkin_staff."
+                "• /start — Show this help menu"
             )
         elif role in ["checkin_staff", "booking_staff"]:
             help_text = (
                 "👋 Welcome, Event Staff!\n\n"
                 "Here are your available commands:\n"
-                "• /newbooking — Add a single booking (with optional ID photo)\n"
-                "• /editbooking — Search and edit bookings by ID or ticket_ref\n"
-                "• /newbookings [EventName] — Bulk import bookings from CSV/XLS (attach file)\n"
-                "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
+                "• /newbooking — Add a single booking\n"
+                "• /editbooking — Search and edit bookings\n"
+                "• /newbookings [EventName] — Bulk import bookings\n"
+                "• /attachphoto — Attach an ID photo\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
-                "• /start — Show this help menu\n\n"
-                "To attach a photo, use the '📷 Attach ID Photo' button after creating a booking, then send the photo."
+                "• /start — Show this help menu"
             )
         else:
             help_text = (
                 "👋 Welcome to EventDayBuddy!\n\n"
                 "This bot helps manage event check-ins and boat boarding.\n"
-                "If you're an event staff member, ask your admin to register you.\n"
-                "Use /start anytime to see your available commands."
+                "If you're an event staff member, ask your admin to register you."
             )
 
         await update.message.reply_text(help_text)
@@ -86,7 +82,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== Export PDF Callback =====
 async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fetch and send the pre-uploaded manifest PDF from Supabase."""
     try:
         query = update.callback_query
         await query.answer()
@@ -112,7 +107,6 @@ async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # ===== Export ID Cards Callback =====
 async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fetch and send the pre-uploaded ID cards PDF from Supabase."""
     try:
         query = update.callback_query
         await query.answer()
@@ -122,7 +116,6 @@ async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_
             active_event_cfg = db.query(Config).filter(Config.key == "active_event").first()
             event_name = active_event_cfg.value if active_event_cfg else "General"
 
-        # ✅ Fix path to align with supabase_storage.upload_idcard convention
         path = f"ids/{event_name}/idcards/boat_{boat_number}.pdf"
         pdf_bytes = fetch_signed_file(path)
 
@@ -139,7 +132,6 @@ async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_
 
 # ===== Sleeptime Command =====
 async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gracefully shut down the bot when commanded by an admin."""
     try:
         user_id = str(update.effective_user.id)
         with get_db() as db:
@@ -153,8 +145,7 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("😴 Going to sleep now... shutting down gracefully.")
         logger.info(f"[Bot] /sleeptime triggered by admin {user_id}")
 
-        if getattr(application, "running", False):
-            # Correct order: stop first, then shutdown
+        if application and getattr(application, "running", False):
             await application.stop()
             await application.shutdown()
             logger.info("[Bot] ✅ Application stopped via /sleeptime")
@@ -165,12 +156,15 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_and_raise("Bot", "handling /sleeptime command", e)
 
 # ===== Bot Initializer for Webhook Mode =====
+# ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
-    global application
+    global application, bot_ready
     import traceback
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
         print("[DEBUG] Building Application...")
+        
+        # ✅ Use ApplicationBuilder with webhook settings
         app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
         # Register commands
@@ -189,23 +183,28 @@ async def init_bot():
         app.add_handler(CommandHandler("sleeptime", sleeptime))
         app.add_handler(CommandHandler("resetbooking", reset_booking))
 
-
-        # Bulk booking handlers
         bookings_bulk.register_handlers(app)
-
-        # Callbacks
         register_checkin_handlers(app)
+
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
-
         print("[DEBUG] Awaiting app.initialize()...")
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")
 
-        # Build webhook URL
+        # ✅ CRITICAL: For webhook mode, we need to start the application
+        # but not with polling. We start it to process the update queue.
+        print("[DEBUG] Starting application for webhook processing...")
+        await app.start()
+        print("[DEBUG] app.start() complete for webhook mode.")
+
+        application = app
+        bot_ready = True
+
+        # ✅ Set webhook
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         print(f"[DEBUG] Webhook URL: {webhook_url}")
         if not webhook_url.startswith("https://"):
@@ -214,18 +213,11 @@ async def init_bot():
         print("[DEBUG] Awaiting app.bot.set_webhook()...")
         await app.bot.set_webhook(webhook_url, drop_pending_updates=True)
         print("[DEBUG] app.bot.set_webhook() complete.")
-        logger.info("[Bot] Webhook set successfully")
-
-        # Start dispatcher (so update_queue is active)
-        print("[DEBUG] Awaiting app.start()...")
-        await app.start()
-        print("[DEBUG] app.start() complete.")
-
-        application = app
-        logger.info("[Bot] ✅ Webhook set and bot initialized.")
-        print("[DEBUG] Bot application fully initialized.")
+        logger.info("[Bot] ✅ Webhook set successfully")
+        print("[DEBUG] Bot application fully initialized for webhook mode.")
 
     except Exception as e:
         print("[DEBUG] Exception in init_bot:", e)
         traceback.print_exc()
+        bot_ready = False
         log_and_raise("Bot Init", "initializing Telegram bot", e)

@@ -190,12 +190,13 @@ class BoardingSession(Base, TimestampMixin):
         return f"<BoardingSession boat={self.boat_number} event={self.event_name} active={self.is_active}>"
 
 # ===== Check-in Log =====
+
 class CheckinLog(Base, TimestampMixin):
     __tablename__ = "checkin_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     booking_id = Column(Integer, ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
-    boat_number = Column(Integer, ForeignKey("boats.boat_number", ondelete="SET NULL"), nullable=False, index=True)
+    boat_number = Column(Integer, ForeignKey("boats.boat_number", ondelete="SET NULL"), nullable=True, index=True)  # Change to nullable=True
     confirmed_by = Column(String, ForeignKey("users.chat_id", ondelete="SET NULL"), nullable=False, index=True)
     method = Column(String, nullable=False)
     confirmed_at = Column(DateTime(timezone=True), server_default=func.now())
