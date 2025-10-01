@@ -16,7 +16,7 @@ from config.logger import logger, log_and_raise
 from config.envs import TELEGRAM_TOKEN, PUBLIC_URL
 from bot.admin import cpe, boatready, checkinmode, editseats, register, unregister
 from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
-from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers
+from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers, reset_booking
 from bot.departure import departed
 from bot.editbooking import editbooking
 from bot import bookings_bulk
