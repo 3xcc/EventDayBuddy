@@ -164,7 +164,7 @@ async def init_bot():
         print("[DEBUG] Building Application...")
         app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-        # Register commands
+        # Register commands (your existing code)
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("cpe", cpe))
         app.add_handler(CommandHandler("newbooking", newbooking))
@@ -191,14 +191,13 @@ async def init_bot():
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")
 
-        print("[DEBUG] Awaiting app.start()...")
-        await app.start()
-        await asyncio.sleep(1)  # ✅ Ensure dispatcher is bound before webhook registration
-        print("[DEBUG] app.start() complete.")
+        # ✅ CRITICAL FIX: Don't call app.start() for webhook mode
+        # app.start() is for polling and will hang waiting for updates
+        # Instead, just set up the webhook and update queue
+        
+        application = app  # ✅ Share application globally
 
-        application = app  # ✅ Share dispatcher globally
-
-        # ✅ Now register webhook
+        # ✅ Set webhook without starting the polling loop
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         print(f"[DEBUG] Webhook URL: {webhook_url}")
         if not webhook_url.startswith("https://"):
@@ -207,8 +206,8 @@ async def init_bot():
         print("[DEBUG] Awaiting app.bot.set_webhook()...")
         await app.bot.set_webhook(webhook_url, drop_pending_updates=True)
         print("[DEBUG] app.bot.set_webhook() complete.")
-        logger.info("[Bot] ✅ Webhook set after dispatcher start")
-        print("[DEBUG] Bot application fully initialized.")
+        logger.info("[Bot] ✅ Webhook set successfully")
+        print("[DEBUG] Bot application fully initialized for webhook mode.")
 
     except Exception as e:
         print("[DEBUG] Exception in init_bot:", e)

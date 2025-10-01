@@ -57,17 +57,18 @@ async def shutdown_event():
     bot_ready = False
     logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
-        if application and getattr(application, "running", False):
-            await application.stop()
+        if application:
+            # For webhook mode, we only need to shutdown, not stop
             await application.shutdown()
-            logger.info("[Shutdown] ✅ Bot application stopped cleanly.")
+            await application.initialize()  # Cleanup
+            logger.info("[Shutdown] ✅ Bot application shutdown cleanly.")
         else:
-            logger.warning("[Shutdown] ⚠️ Bot was already stopped or not initialized.")
+            logger.warning("[Shutdown] ⚠️ Bot application was not initialized.")
     except Exception as e:
         logger.error(f"[Shutdown] ❌ Bot shutdown failed: {e}", exc_info=True)
     finally:
         close_engine()
-
+        
 # ===== Health Check =====
 @app.get("/", tags=["Health"])
 def health_check():
