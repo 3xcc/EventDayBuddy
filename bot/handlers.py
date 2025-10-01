@@ -157,7 +157,7 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
-    global application, bot_ready
+    global application
     import traceback
     try:
         logger.info("[Bot] Initializing Telegram bot application...")
@@ -179,11 +179,9 @@ async def init_bot():
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
 
-        # Bulk booking handlers
         bookings_bulk.register_handlers(app)
-
-        # Callback handlers
         register_checkin_handlers(app)
+
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
@@ -193,7 +191,14 @@ async def init_bot():
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")
 
-        # Build and set webhook
+        print("[DEBUG] Awaiting app.start()...")
+        await app.start()
+        await asyncio.sleep(1)  # ✅ Ensure dispatcher is bound before webhook registration
+        print("[DEBUG] app.start() complete.")
+
+        application = app  # ✅ Share dispatcher globally
+
+        # ✅ Now register webhook
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         print(f"[DEBUG] Webhook URL: {webhook_url}")
         if not webhook_url.startswith("https://"):
@@ -202,17 +207,7 @@ async def init_bot():
         print("[DEBUG] Awaiting app.bot.set_webhook()...")
         await app.bot.set_webhook(webhook_url, drop_pending_updates=True)
         print("[DEBUG] app.bot.set_webhook() complete.")
-        logger.info("[Bot] Webhook set successfully")
-
-        # Start dispatcher and delay readiness
-        print("[DEBUG] Awaiting app.start()...")
-        await app.start()
-        await asyncio.sleep(1)  # ✅ Ensure dispatcher is bound before marking ready
-        print("[DEBUG] app.start() complete.")
-
-        application = app
-        ## bot_ready = True  # ✅ Mark bot as ready for webhook processing
-        logger.info("[Bot] ✅ Webhook set and bot initialized.")
+        logger.info("[Bot] ✅ Webhook set after dispatcher start")
         print("[DEBUG] Bot application fully initialized.")
 
     except Exception as e:
