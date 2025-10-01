@@ -1,8 +1,8 @@
-"""baseline schema
+"""initial_schema
 
-Revision ID: b59515f5d30b
+Revision ID: 9bc7eaa492a8
 Revises: 
-Create Date: 2025-09-24 23:28:36.254262
+Create Date: 2025-10-02 04:46:29.528999
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b59515f5d30b'
+revision: str = '9bc7eaa492a8'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -32,14 +32,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_boats_boat_number'), 'boats', ['boat_number'], unique=True)
     op.create_index(op.f('ix_boats_id'), 'boats', ['id'], unique=False)
     op.create_index(op.f('ix_boats_status'), 'boats', ['status'], unique=False)
-    op.create_table('booking_groups',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('phone', sa.String(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_booking_groups_id'), 'booking_groups', ['id'], unique=False)
     op.create_table('config',
     sa.Column('key', sa.String(), nullable=False),
     sa.Column('value', sa.String(), nullable=True),
@@ -72,8 +64,8 @@ def upgrade() -> None:
     op.create_table('boarding_sessions',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('boat_number', sa.Integer(), nullable=False),
-    sa.Column('event_name', sa.String(), nullable=True),
     sa.Column('started_by', sa.String(), nullable=False),
+    sa.Column('leg_type', sa.Enum('arrival', 'departure', name='leg_type'), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('started_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('ended_at', sa.DateTime(timezone=True), nullable=True),
@@ -86,10 +78,23 @@ def upgrade() -> None:
     op.create_index(op.f('ix_boarding_sessions_boat_number'), 'boarding_sessions', ['boat_number'], unique=False)
     op.create_index(op.f('ix_boarding_sessions_id'), 'boarding_sessions', ['id'], unique=False)
     op.create_index(op.f('ix_boarding_sessions_is_active'), 'boarding_sessions', ['is_active'], unique=False)
+    op.create_index(op.f('ix_boarding_sessions_leg_type'), 'boarding_sessions', ['leg_type'], unique=False)
     op.create_index(op.f('ix_boarding_sessions_started_by'), 'boarding_sessions', ['started_by'], unique=False)
+    op.create_table('booking_groups',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('event_id', sa.String(), nullable=False),
+    sa.Column('phone', sa.String(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['event_id'], ['events.name'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_booking_groups_event_id'), 'booking_groups', ['event_id'], unique=False)
+    op.create_index(op.f('ix_booking_groups_id'), 'booking_groups', ['id'], unique=False)
+    op.create_index(op.f('ix_booking_groups_phone'), 'booking_groups', ['phone'], unique=False)
     op.create_table('bookings',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('event_id', sa.Integer(), nullable=False),
+    sa.Column('event_id', sa.String(), nullable=False),
     sa.Column('ticket_ref', sa.String(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('id_number', sa.String(), nullable=False),
@@ -111,7 +116,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['arrival_boat_boarded'], ['boats.boat_number'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['departure_boat_boarded'], ['boats.boat_number'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['event_id'], ['events.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['event_id'], ['events.name'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['group_id'], ['booking_groups.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -121,10 +126,22 @@ def upgrade() -> None:
     op.create_index(op.f('ix_bookings_phone'), 'bookings', ['phone'], unique=False)
     op.create_index(op.f('ix_bookings_status'), 'bookings', ['status'], unique=False)
     op.create_index(op.f('ix_bookings_ticket_ref'), 'bookings', ['ticket_ref'], unique=True)
+    op.create_table('booking_edit_logs',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('booking_id', sa.Integer(), nullable=False),
+    sa.Column('field', sa.String(), nullable=False),
+    sa.Column('old_value', sa.String(), nullable=True),
+    sa.Column('new_value', sa.String(), nullable=True),
+    sa.Column('edited_by', sa.String(), nullable=False),
+    sa.Column('edited_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['booking_id'], ['bookings.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_booking_edit_logs_id'), 'booking_edit_logs', ['id'], unique=False)
     op.create_table('checkin_logs',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('booking_id', sa.Integer(), nullable=False),
-    sa.Column('boat_number', sa.Integer(), nullable=False),
+    sa.Column('boat_number', sa.Integer(), nullable=True),
     sa.Column('confirmed_by', sa.String(), nullable=False),
     sa.Column('method', sa.String(), nullable=False),
     sa.Column('confirmed_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
@@ -188,6 +205,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_checkin_logs_booking_id'), table_name='checkin_logs')
     op.drop_index(op.f('ix_checkin_logs_boat_number'), table_name='checkin_logs')
     op.drop_table('checkin_logs')
+    op.drop_index(op.f('ix_booking_edit_logs_id'), table_name='booking_edit_logs')
+    op.drop_table('booking_edit_logs')
     op.drop_index(op.f('ix_bookings_ticket_ref'), table_name='bookings')
     op.drop_index(op.f('ix_bookings_status'), table_name='bookings')
     op.drop_index(op.f('ix_bookings_phone'), table_name='bookings')
@@ -195,7 +214,12 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_bookings_id'), table_name='bookings')
     op.drop_index(op.f('ix_bookings_group_id'), table_name='bookings')
     op.drop_table('bookings')
+    op.drop_index(op.f('ix_booking_groups_phone'), table_name='booking_groups')
+    op.drop_index(op.f('ix_booking_groups_id'), table_name='booking_groups')
+    op.drop_index(op.f('ix_booking_groups_event_id'), table_name='booking_groups')
+    op.drop_table('booking_groups')
     op.drop_index(op.f('ix_boarding_sessions_started_by'), table_name='boarding_sessions')
+    op.drop_index(op.f('ix_boarding_sessions_leg_type'), table_name='boarding_sessions')
     op.drop_index(op.f('ix_boarding_sessions_is_active'), table_name='boarding_sessions')
     op.drop_index(op.f('ix_boarding_sessions_id'), table_name='boarding_sessions')
     op.drop_index(op.f('ix_boarding_sessions_boat_number'), table_name='boarding_sessions')
@@ -206,8 +230,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_events_id'), table_name='events')
     op.drop_table('events')
     op.drop_table('config')
-    op.drop_index(op.f('ix_booking_groups_id'), table_name='booking_groups')
-    op.drop_table('booking_groups')
     op.drop_index(op.f('ix_boats_status'), table_name='boats')
     op.drop_index(op.f('ix_boats_id'), table_name='boats')
     op.drop_index(op.f('ix_boats_boat_number'), table_name='boats')

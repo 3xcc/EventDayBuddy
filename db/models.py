@@ -177,8 +177,8 @@ class BoardingSession(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     boat_number = Column(Integer, ForeignKey("boats.boat_number", ondelete="CASCADE"), nullable=False, index=True)
-    event_id = Column(String, nullable=True)  # ⚠️ candidate for refactor to Event FK later
     started_by = Column(String, ForeignKey("users.chat_id", ondelete="CASCADE"), nullable=False, index=True)
+    leg_type = Column(Enum("arrival", "departure", name="leg_type"), nullable=False, default="arrival", index=True)
     is_active = Column(Boolean, default=True, index=True)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)
@@ -187,7 +187,7 @@ class BoardingSession(Base, TimestampMixin):
     user_rel = relationship("User", back_populates="sessions_started")
 
     def __repr__(self):
-        return f"<BoardingSession boat={self.boat_number} event={self.event_name} active={self.is_active}>"
+        return f"<BoardingSession boat={self.boat_number} leg={self.leg_type} event={self.event_id} active={self.is_active}>"
 
 # ===== Check-in Log =====
 

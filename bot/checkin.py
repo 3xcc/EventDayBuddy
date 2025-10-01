@@ -156,27 +156,38 @@ async def show_booking_selection(update: Update, bookings: list, method: str):
         # For single booking or individual selection from group
         booking = bookings[0]  # First booking in list
         
-        # Check which legs are needed
-        needs_arrival = not booking.arrival_boat_boarded
-        needs_departure = not booking.departure_boat_boarded
-        
-        # If both legs are completed
-        if not needs_arrival and not needs_departure:
+        # Get active session to determine leg type
+        with get_db() as db:
+            session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
+            if not session:
+                await update.message.reply_text("⚠️ No active boat session. Use /boatready first.")
+                return
+
+            leg_type = session.leg_type
+
+        # Check which leg is needed based on session leg_type
+        if leg_type == "arrival":
+            needs_checkin = not booking.arrival_boat_boarded
+            leg_status = f"Boat {booking.arrival_boat_boarded}" if booking.arrival_boat_boarded else "Not checked in"
+        else:  # departure
+            needs_checkin = not booking.departure_boat_boarded
+            leg_status = f"Boat {booking.departure_boat_boarded}" if booking.departure_boat_boarded else "Not checked in"
+
+        # If already checked in for this leg
+        if not needs_checkin:
+            leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
             await update.message.reply_text(
-                f"✅ {booking.name} is already checked in for both arrival and departure.\n"
-                f"Arrival: Boat {booking.arrival_boat_boarded}\n"
-                f"Departure: Boat {booking.departure_boat_boarded}"
+                f"✅ {booking.name} is already checked in for {leg_emoji} {leg_type.upper()}.\n"
+                f"{leg_type.capitalize()}: {leg_status}"
             )
             return
 
-        # Build appropriate buttons
-        buttons = []
-        if needs_arrival:
-            buttons.append([InlineKeyboardButton("✅ Arrival Boarding", callback_data=f"confirm:arrival:{booking.id}")])
-        if needs_departure:
-            buttons.append([InlineKeyboardButton("✅ Departure Boarding", callback_data=f"confirm:departure:{booking.id}")])
-        
-        buttons.append([InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{booking.id}")])
+        # Build check-in button for current leg only
+        leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
+        buttons = [
+            [InlineKeyboardButton(f"✅ {leg_emoji} Check-in for {leg_type.capitalize()}", callback_data=f"confirm:{leg_type}:{booking.id}")],
+            [InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{booking.id}")]
+        ]
         reply_markup = InlineKeyboardMarkup(buttons)
 
         caption = (
@@ -184,7 +195,8 @@ async def show_booking_selection(update: Update, bookings: list, method: str):
             f"ID: {booking.id_number}\n"
             f"Phone: {booking.phone}\n"
             f"Male Dep: {booking.male_dep or '-'}\n"
-            f"Resort Dep: {booking.resort_dep or '-'}\n"
+            f"Resort Dep: {booking.resort_dep or '-'}\n\n"
+            f"Current Session: {leg_emoji} {leg_type.upper()}\n"
         )
         
         # Show leg status
@@ -279,13 +291,23 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 await query.edit_message_text("❌ Boat not found.")
                 return
 
-            # Count current passengers
-            current_passenger_count = db.query(Booking).filter(
-                Booking.arrival_boat_boarded == session.boat_number
-            ).count()
+            leg_type = session.leg_type
 
-            # Count how many in this group need check-in
-            group_needs_checkin = [b for b in bookings if not b.arrival_boat_boarded or not b.departure_boat_boarded]
+            # Count current passengers for this leg
+            if leg_type == "arrival":
+                current_passenger_count = db.query(Booking).filter(
+                    Booking.arrival_boat_boarded == session.boat_number
+                ).count()
+            else:  # departure
+                current_passenger_count = db.query(Booking).filter(
+                    Booking.departure_boat_boarded == session.boat_number
+                ).count()
+
+            # Count how many in this group need check-in for this leg
+            if leg_type == "arrival":
+                group_needs_checkin = [b for b in bookings if not b.arrival_boat_boarded]
+            else:  # departure
+                group_needs_checkin = [b for b in bookings if not b.departure_boat_boarded]
             
             if current_passenger_count + len(group_needs_checkin) > boat.capacity:
                 await query.edit_message_text(
@@ -331,11 +353,13 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
 
             db.commit()
 
+        leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
         await query.edit_message_text(
             f"✅ Group check-in completed!\n"
             f"📞 Phone: {phone_number}\n"
             f"👥 Checked in: {checked_in_count} passenger(s)\n"
-            f"🛳 Boat: {session.boat_number}"
+            f"🛳 Boat: {session.boat_number}\n"
+            f"Leg: {leg_emoji} {leg_type.upper()}"
         )
 
         logger.info(f"[Checkin] Group check-in for phone {phone_number}: {checked_in_count} passengers by {user_id}")
@@ -415,6 +439,24 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
             if not session:
                 await query.edit_message_text("⚠️ No active boat session.")
+                return
+
+            # Verify leg matches session leg_type
+            if leg != session.leg_type:
+                await query.edit_message_text(
+                    f"❌ Current session is for {session.leg_type.upper()} boarding.\n"
+                    f"Cannot check in for {leg.upper()} boarding.\n"
+                    f"Please start a new session with /boatready for {leg} boarding."
+                )
+                return
+
+            # Verify leg matches session leg_type
+            if leg != session.leg_type:
+                await query.edit_message_text(
+                    f"❌ Current session is for {session.leg_type.upper()} boarding.\n"
+                    f"Cannot check in for {leg.upper()} boarding.\n"
+                    f"Please start a new session with /boatready for {leg} boarding."
+                )
                 return
 
             # === FIXED CAPACITY CHECK ===

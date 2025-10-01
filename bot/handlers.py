@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 from config.logger import logger, log_and_raise
 from config.envs import TELEGRAM_TOKEN, PUBLIC_URL
-from bot.admin import cpe, boatready, checkinmode, editseats, register, unregister
+from bot.admin import cpe, boatready, boatready_callback, checkinmode, editseats, register, unregister
 from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers, reset_booking
 from bot.departure import departed
@@ -189,6 +189,7 @@ async def init_bot():
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
         app.add_handler(CallbackQueryHandler(attach_photo_callback, pattern=r"^attachphoto:\d+$"))
+        app.add_handler(CallbackQueryHandler(boatready_callback, pattern=r"^boatready:(arrival|departure):\d+:\d+$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_booking_photo))
 
         print("[DEBUG] Awaiting app.initialize()...")
