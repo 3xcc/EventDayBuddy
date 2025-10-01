@@ -65,7 +65,7 @@ def build_master_row(booking: dict, event_name: str) -> list:
     Build a row aligned with MASTER_HEADERS from a booking dict.
     Preserves CreatedAt if provided, always refreshes UpdatedAt.
     """
-    now = datetime.utcnow().isoformat()
+    now = datetime.now().isoformat()
     created_at = booking.get("created_at") or now
     updated_at = now
 

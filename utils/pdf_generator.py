@@ -45,7 +45,7 @@ def generate_manifest_pdf(boat_number: str, event_name: str = None) -> bytes:
 
         # Title + subtitle
         title = f"Boat {boat_number} Manifest"
-        subtitle = f"{event_name or 'Event'} — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        subtitle = f"{event_name or 'Event'} — {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}"
 
         def draw_headers(y):
             c.setFont("Helvetica-Bold", 10)

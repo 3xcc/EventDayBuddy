@@ -23,4 +23,4 @@ def draw_footer(c: canvas.Canvas, page_num: int, total_pages: int = None):
     else:
         footer_text = f"Page {page_num}"
     c.drawRightString(page_width - 40, 20, footer_text)
-    c.drawString(30, 20, datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"))
+    c.drawString(30, 20, datetime.now().strftime("%Y-%m-%d %H:%M UTC"))

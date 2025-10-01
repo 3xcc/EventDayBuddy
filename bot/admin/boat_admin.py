@@ -35,7 +35,7 @@ async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # End any active sessions
             db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).update({
                 "is_active": False,
-                "ended_at": datetime.utcnow()
+                "ended_at": datetime.now()
             })
 
             # Start new session
@@ -43,7 +43,7 @@ async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 boat_number=boat_number,
                 started_by=user_id,
                 is_active=True,
-                started_at=datetime.utcnow()
+                started_at=datetime.now()
             )
             db.add(session)
             db.commit()
