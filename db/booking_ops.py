@@ -2,7 +2,7 @@ from services.booking_service import generate_ticket_ref
 from typing import List, Dict
 from config.logger import logger, log_and_raise
 from db.init import get_db
-from db.models import Booking, Event
+from db.models import Booking, Event, BookingGroup
 from sqlalchemy.exc import SQLAlchemyError
 
 def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_name: str) -> List[int]:
@@ -13,30 +13,50 @@ def bulk_insert_bookings(rows: List[Dict], triggered_by: str, event_name: str) -
     inserted_ids = []
     try:
         with get_db() as db:
+            # === GROUP PREPARATION - NEW CODE ===
+            # Get all unique phones from the rows
+            unique_phones = set(row.get("phone") for row in rows if row.get("phone"))
+            phone_to_group = {}
+            
+            # Get or create groups for each unique phone
+            for phone in unique_phones:
+                from services.group_service import get_or_create_group  # Import here to avoid circular imports
+                group = get_or_create_group(db, phone, event_name)
+                phone_to_group[phone] = group
+
+            # Process each row
             for row in rows:
                 # Always generate ticket_ref if not present or empty
                 ticket_ref = row.get("ticket_ref")
                 if not ticket_ref:
                     ticket_ref = generate_ticket_ref(str(event_name))
 
+                # Get group for this booking's phone
+                group = None
+                phone = row.get("phone")
+                if phone and phone in phone_to_group:
+                    group = phone_to_group[phone]
+
                 booking = Booking(
                     event_id=event_name,
                     ticket_ref=ticket_ref,
                     name=row.get("name"),
                     id_number=row.get("id_number"),
-                    phone=row.get("phone"),
+                    phone=phone,
                     male_dep=row.get("male_dep"),
                     resort_dep=row.get("resort_dep"),
                     paid_amount=row.get("paid_amount"),
                     transfer_ref=row.get("transfer_ref"),
                     ticket_type=row.get("ticket_type"),
                     status="booked",  # default
+                    group_id=group.id if group else None,  # ADD group assignment
                 )
                 db.add(booking)
                 db.flush()  # assign ID before commit
                 inserted_ids.append(booking.id)
 
             logger.info(f"[DB] ✅ Bulk inserted {len(inserted_ids)} bookings for event_name={event_name} (by {triggered_by})")
+            logger.info(f"[DB] 📞 Created/used {len(phone_to_group)} groups for {len(unique_phones)} unique phones")
 
         return inserted_ids
 

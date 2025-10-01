@@ -108,12 +108,18 @@ class BookingGroup(Base, TimestampMixin):
     __tablename__ = "booking_groups"
 
     id = Column(Integer, primary_key=True, index=True)
-    phone = Column(String, nullable=False)
+    event_id = Column(String, ForeignKey("events.name", ondelete="CASCADE"), nullable=False, index=True)
+    phone = Column(String, nullable=False, index=True)
+    
+    # Add unique constraint for event_id + phone combination
+    __table_args__ = (UniqueConstraint('event_id', 'phone', name='uix_event_phone'),)
 
+    # Relationships
+    event = relationship("Event", backref="booking_groups")
     bookings = relationship("Booking", back_populates="group")
 
     def __repr__(self):
-        return f"<BookingGroup id={self.id} phone={self.phone}>"
+        return f"<BookingGroup id={self.id} event={self.event_id} phone={self.phone}>"
 
 # ===== Ticket Transfer Log =====
 class TicketTransferLog(Base, TimestampMixin):

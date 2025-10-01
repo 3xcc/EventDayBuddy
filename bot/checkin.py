@@ -563,3 +563,10 @@ def register_checkin_handlers(app):
             pattern=r"^skip:\d+$"
         )
     )
+    # NEW: Add group selection handler
+    app.add_handler(
+        CallbackQueryHandler(
+            require_role("checkin_staff")(handle_group_selection),
+            pattern=r"^(group:(all|skip):.+|select:\d+)$"
+        )
+    )

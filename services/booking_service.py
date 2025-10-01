@@ -1,5 +1,6 @@
+# services/booking_service.py - UPDATED VERSION
 import uuid
-from db.models import Booking
+from db.models import Booking, Event, BookingGroup  # ADD BookingGroup import
 from config.logger import logger
 
 def generate_ticket_ref(event_name: str) -> str:
@@ -23,10 +24,9 @@ def create_booking(
     departure_time,
     id_doc_url=None,
 ):
-    from db.models import Event
     # === Validation ===
-    if not all([event_name, name, id_number]):
-        raise ValueError("Missing required booking fields: event_name, name, id_number")
+    if not all([event_name, name, id_number, phone]):  # ADD phone to required fields
+        raise ValueError("Missing required booking fields: event_name, name, id_number, phone")
 
     # Normalize inputs
     id_number = id_number.strip().upper()
@@ -45,6 +45,12 @@ def create_booking(
     if existing:
         raise Exception(f"Booking already exists for {existing.name} ({existing.id_number})")
 
+    # === GROUP ASSIGNMENT - NEW CODE ===
+    group = None
+    if phone:
+        from services.group_service import get_or_create_group  # Import here to avoid circular imports
+        group = get_or_create_group(db, phone, event_name)
+
     # Generate ticket reference
     ticket_ref = generate_ticket_ref(event_name)
 
@@ -62,13 +68,14 @@ def create_booking(
         arrival_time=arrival_time,
         departure_time=departure_time,
         id_doc_url=id_doc_url,
+        group_id=group.id if group else None,  # ADD group assignment
     )
 
     try:
         db.add(booking)
         db.commit()
         db.refresh(booking)
-        logger.info(f"[Booking] Created booking {booking.id} ({booking.ticket_ref}) for {booking.name}")
+        logger.info(f"[Booking] Created booking {booking.id} ({booking.ticket_ref}) for {booking.name}, group: {group.id if group else 'None'}")
         return booking
     except Exception as e:
         db.rollback()
