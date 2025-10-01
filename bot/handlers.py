@@ -1,4 +1,3 @@
-# ===== RunTests Command (Admin Only) =====
 import subprocess
 import tempfile
 import os
@@ -31,7 +30,6 @@ bot_ready = False  # ✅ Used by /health endpoint
 
 # ===== Command Handlers =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dynamic /start command — shows role-based help menu."""
     try:
         user_id = str(update.effective_user.id)
         with get_db() as db:
@@ -49,35 +47,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• /checkinmode — Enable check-in mode\n"
                 "• /editseats — Adjust boat capacity\n"
                 "• /departed — Mark boat departed\n"
-                "• /newbooking — Add a single booking (with optional ID photo)\n"
-                "• /editbooking — Search and edit bookings by ID or ticket_ref\n"
-                "• /newbookings [EventName] — Bulk import bookings from CSV/XLS (attach file)\n"
-                "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
+                "• /newbooking — Add a single booking\n"
+                "• /editbooking — Search and edit bookings\n"
+                "• /newbookings [EventName] — Bulk import bookings\n"
+                "• /attachphoto — Attach an ID photo\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
                 "• /sleeptime — Gracefully shut down the bot\n"
-                "• /start — Show this help menu\n\n"
-                "Staff can be assigned roles: admin, booking_staff, checkin_staff."
+                "• /start — Show this help menu"
             )
         elif role in ["checkin_staff", "booking_staff"]:
             help_text = (
                 "👋 Welcome, Event Staff!\n\n"
                 "Here are your available commands:\n"
-                "• /newbooking — Add a single booking (with optional ID photo)\n"
-                "• /editbooking — Search and edit bookings by ID or ticket_ref\n"
-                "• /newbookings [EventName] — Bulk import bookings from CSV/XLS (attach file)\n"
-                "• /attachphoto — Attach an ID photo to a booking (use the button or command)\n"
+                "• /newbooking — Add a single booking\n"
+                "• /editbooking — Search and edit bookings\n"
+                "• /newbookings [EventName] — Bulk import bookings\n"
+                "• /attachphoto — Attach an ID photo\n"
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
-                "• /start — Show this help menu\n\n"
-                "To attach a photo, use the '📷 Attach ID Photo' button after creating a booking, then send the photo."
+                "• /start — Show this help menu"
             )
         else:
             help_text = (
                 "👋 Welcome to EventDayBuddy!\n\n"
                 "This bot helps manage event check-ins and boat boarding.\n"
-                "If you're an event staff member, ask your admin to register you.\n"
-                "Use /start anytime to see your available commands."
+                "If you're an event staff member, ask your admin to register you."
             )
 
         await update.message.reply_text(help_text)
@@ -87,7 +82,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== Export PDF Callback =====
 async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fetch and send the pre-uploaded manifest PDF from Supabase."""
     try:
         query = update.callback_query
         await query.answer()
@@ -113,7 +107,6 @@ async def export_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # ===== Export ID Cards Callback =====
 async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fetch and send the pre-uploaded ID cards PDF from Supabase."""
     try:
         query = update.callback_query
         await query.answer()
@@ -139,7 +132,6 @@ async def export_idcards_callback(update: Update, context: ContextTypes.DEFAULT_
 
 # ===== Sleeptime Command =====
 async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gracefully shut down the bot when commanded by an admin."""
     try:
         user_id = str(update.effective_user.id)
         with get_db() as db:
@@ -162,7 +154,6 @@ async def sleeptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         log_and_raise("Bot", "handling /sleeptime command", e)
-
 
 # ===== Bot Initializer for Webhook Mode =====
 async def init_bot():
@@ -191,7 +182,7 @@ async def init_bot():
         # Bulk booking handlers
         bookings_bulk.register_handlers(app)
 
-        # Callbacks
+        # Callback handlers
         register_checkin_handlers(app)
         app.add_handler(CallbackQueryHandler(export_pdf_callback, pattern=r"^exportpdf:\d+$"))
         app.add_handler(CallbackQueryHandler(export_idcards_callback, pattern=r"^exportidcards:\d+$"))
@@ -202,7 +193,7 @@ async def init_bot():
         await app.initialize()
         print("[DEBUG] app.initialize() complete.")
 
-        # Build webhook URL
+        # Build and set webhook
         webhook_url = f"{PUBLIC_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
         print(f"[DEBUG] Webhook URL: {webhook_url}")
         if not webhook_url.startswith("https://"):
@@ -213,13 +204,14 @@ async def init_bot():
         print("[DEBUG] app.bot.set_webhook() complete.")
         logger.info("[Bot] Webhook set successfully")
 
-        # Start dispatcher (so update_queue is active)
+        # Start dispatcher and delay readiness
         print("[DEBUG] Awaiting app.start()...")
         await app.start()
+        await asyncio.sleep(1)  # ✅ Ensure dispatcher is bound before marking ready
         print("[DEBUG] app.start() complete.")
 
         application = app
-        bot_ready = True  # ✅ Mark bot as ready for health check
+        bot_ready = True  # ✅ Mark bot as ready for webhook processing
         logger.info("[Bot] ✅ Webhook set and bot initialized.")
         print("[DEBUG] Bot application fully initialized.")
 

@@ -40,6 +40,7 @@ async def startup_event():
         try:
             print(f"[DEBUG] init_bot() attempt {attempt+1}")
             await init_bot()
+            await asyncio.sleep(1)  # ✅ Ensure dispatcher is bound before marking ready
             bot_ready = True
             logger.info("[Startup] ✅ Bot initialized successfully.")
             break
@@ -82,10 +83,10 @@ def health_check():
 async def telegram_webhook(request: Request):
     try:
         if not bot_ready or not application or not getattr(application, "running", False):
-            logger.error("[Webhook] ❌ Bot application not initialized — update dropped.")
+            logger.warning("[Webhook] Update dropped — bot not ready")
             return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"ok": False, "error": "Bot not initialized"},
+                status_code=status.HTTP_200_OK,  # ✅ Avoid retry storm
+                content={"ok": False, "dropped": True}
             )
 
         data = await request.json()
