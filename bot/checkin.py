@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes, CallbackQueryHandler
 from config.logger import logger, log_and_raise
 from config.envs import DRY_RUN
 from db.init import get_db
-from db.models import Booking, BoardingSession, CheckinLog, Config
+from db.models import Booking, BoardingSession, CheckinLog, Config, Boat
 from utils.supabase_storage import fetch_signed_file
 from utils.booking_schema import build_master_row, build_event_row
 from sheets.manager import update_booking
