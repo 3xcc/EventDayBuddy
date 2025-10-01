@@ -1,26 +1,28 @@
 import os
 import asyncio
-from fastapi.responses import JSONResponse
 from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from telegram import Update
+
 from config.logger import logger
 from config.envs import LOG_LEVEL, TELEGRAM_TOKEN
-from bot.handlers import init_bot, application, bot_ready
-from telegram import Update
+from bot.handlers import init_bot, application
 from db.init import close_engine
 
-# Render sets PORT automatically; default to 8000 for local dev
-PORT = int(os.getenv("PORT", 8000))
+# ===== Global State =====
+bot_ready = False  # Tracks bot readiness across lifecycle
 
-# Allow all origins in dev, restrict in prod
+# ===== Port and CORS =====
+PORT = int(os.getenv("PORT", 8000))
 ALLOWED_ORIGINS = (
     ["*"] if os.getenv("ENV", "dev") == "dev"
     else os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
 )
 
+# ===== FastAPI App =====
 app = FastAPI(title="EventDayBuddy API", version="1.0.0")
 
-# ===== Middleware =====
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -32,23 +34,26 @@ app.add_middleware(
 # ===== Startup Hook =====
 @app.on_event("startup")
 async def startup_event():
+    global bot_ready
     logger.info("[Web] FastAPI startup — initializing bot...")
     for attempt in range(3):
         try:
             print(f"[DEBUG] init_bot() attempt {attempt+1}")
             await init_bot()
-            logger.info("[Startup] Bot initialized successfully.")
+            bot_ready = True
+            logger.info("[Startup] ✅ Bot initialized successfully.")
             break
         except Exception as e:
-            logger.error(f"[Startup] Bot init failed (attempt {attempt+1}): {e}", exc_info=True)
+            logger.error(f"[Startup] ❌ Bot init failed (attempt {attempt+1}): {e}", exc_info=True)
             await asyncio.sleep(2 * attempt)
     else:
-        logger.critical("[Startup] Bot failed to initialize after retries.")
+        logger.critical("[Startup] ❌ Bot failed to initialize after retries.")
 
 # ===== Shutdown Hook =====
 @app.on_event("shutdown")
 async def shutdown_event():
-    bot_ready = False  # ✅ Mark bot as not ready
+    global bot_ready
+    bot_ready = False
     logger.info("[Web] FastAPI shutdown — cleaning up bot and DB...")
     try:
         if application and getattr(application, "running", False):
@@ -62,7 +67,7 @@ async def shutdown_event():
     finally:
         close_engine()
 
-# ===== Routes =====
+# ===== Health Check =====
 @app.get("/", tags=["Health"])
 def health_check():
     logger.info("[Web] Health check endpoint called.")
@@ -76,15 +81,15 @@ def health_check():
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
     try:
-        if not application or not getattr(application, "running", False):
-            logger.error("[Webhook] Bot application not initialized — update dropped.")
+        if not bot_ready or not application or not getattr(application, "running", False):
+            logger.error("[Webhook] ❌ Bot application not initialized — update dropped.")
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content={"ok": False, "error": "Bot not initialized"},
             )
 
         data = await request.json()
-        logger.info(f"[Webhook] Incoming update from {request.client.host}")
+        logger.info(f"[Webhook] 📩 Incoming update from {request.client.host}")
 
         update = Update.de_json(data, application.bot)
         await application.update_queue.put(update)
@@ -92,7 +97,7 @@ async def telegram_webhook(request: Request):
         return JSONResponse(status_code=status.HTTP_200_OK, content={"ok": True})
 
     except Exception as e:
-        logger.exception("[Webhook] Failed to process update")
+        logger.exception("[Webhook] ❌ Failed to process update")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"ok": False, "error": str(e)},

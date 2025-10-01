@@ -1,4 +1,6 @@
 import uvicorn
+import traceback
+
 from config.logger import logger, log_and_raise
 from config.envs import DRY_RUN, LOG_LEVEL
 from db.init import init_db
@@ -30,9 +32,9 @@ def main():
 
     except Exception as e:
         print("[DEBUG] Exception in main():", e)
-        import traceback
         traceback.print_exc()
         log_and_raise("Main", "starting EventDayBuddy web service", e)
+
     finally:
         print("[DEBUG] main() finally block reached.")
         logger.info("🛑 EventDayBuddy has stopped.")
