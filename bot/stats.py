@@ -21,7 +21,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             event_name = active_event_cfg.value
 
-            # Get bookings for this event with male_dep or resort_dep
+            # Get bookings for this event (must have at least one leg time)
             bookings = db.query(Booking).filter(
                 Booking.event_id == event_name,
                 or_(Booking.male_dep.isnot(None), Booking.resort_dep.isnot(None))
@@ -31,73 +31,74 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"❌ No bookings found for event: {event_name}")
                 return
 
-            # Time & Attendance section
-            time_stats = {}
-            for booking in bookings:
-                # Use departure_time as the time slot (format as HH:MM)
-                time_slot = None
-                if booking.departure_time:
-                    time_slot = booking.departure_time.strftime("%H:%M")
-                elif booking.arrival_time:
-                    time_slot = booking.arrival_time.strftime("%H:%M")
+            # Time & Attendance by legs
+            male_stats, resort_stats = {}, {}
 
-                if time_slot:
-                    if time_slot not in time_stats:
-                        time_stats[time_slot] = {"booked": 0, "checked_in": 0}
-                    time_stats[time_slot]["booked"] += 1
-                    if booking.status == "checked_in":
-                        time_stats[time_slot]["checked_in"] += 1
+            def _add(slot_dict, slot_key: str, is_checked: bool):
+                if not slot_key:
+                    return
+                slot_dict.setdefault(slot_key, {"booked": 0, "checked_in": 0})
+                slot_dict[slot_key]["booked"] += 1
+                if is_checked:
+                    slot_dict[slot_key]["checked_in"] += 1
 
-            # Ticket Type section
+            for b in bookings:
+                _add(male_stats,   (b.male_dep   or "").strip(), b.status == "checked_in")
+                _add(resort_stats, (b.resort_dep or "").strip(), b.status == "checked_in")
+
+            # Ticket Type counts
             ticket_stats = {}
-            for booking in bookings:
-                ticket_type = booking.ticket_type or "Unknown"
-                ticket_stats[ticket_type] = ticket_stats.get(ticket_type, 0) + 1
+            for b in bookings:
+                ticket_stats[b.ticket_type or "Unknown"] = ticket_stats.get(b.ticket_type or "Unknown", 0) + 1
 
-            # Status update count (checkin logs)
-            checkin_logs = db.query(CheckinLog).filter(
+            # Check-in log count
+            status_update_count = db.query(CheckinLog).filter(
                 CheckinLog.booking_id.in_([b.id for b in bookings])
-            ).all()
-            status_update_count = len(checkin_logs)
+            ).count()
 
-            # Build response message
-            response = "📊 **Event Statistics**\n"
-            response += f"Event: {event_name}\n"
-            response += f"Total Bookings: {len(bookings)}\n\n"
-
-            # Add summary section
+            # ─── Build message ──────────────────────────────────────────────
             total_booked = len(bookings)
-            total_checked_in = sum(1 for booking in bookings if booking.status == "checked_in")
+            total_checked_in = sum(1 for b in bookings if b.status == "checked_in")
 
-            response += "**📈 Summary**\n"
-            response += f"Total booked = {total_booked}\n"
-            response += f"Total Checkedin = {total_checked_in}\n\n"
+            resp = "📊 **Event Statistics**\n"
+            resp += f"Event: {event_name}\n"
+            resp += f"Total Bookings: {total_booked}\n\n"
 
-            # Time & Attendance section
-            response += "**⏰ Time & Attendance**\n"
-            if time_stats:
-                for time_slot in sorted(time_stats.keys()):
-                    counts = time_stats[time_slot]
-                    response += f"{time_slot} - {counts['booked']}\n"
-                    response += f"  booked = {counts['booked']}\n"
-                    response += f"  checked_in = {counts['checked_in']}\n"
+            resp += "**📈 Summary**\n"
+            resp += f"Total booked = {total_booked}\n"
+            resp += f"Total checked-in = {total_checked_in}\n\n"
+
+            # Time & Attendance
+            resp += "**⏰ Time & Attendance**\n"
+            if male_stats or resort_stats:
+                if male_stats:
+                    resp += "\n**🛬 Male ➔ Resort (Arrival Leg)**\n"
+                    for t in sorted(male_stats):
+                        c = male_stats[t]
+                        resp += f"{t}  —  booked: {c['booked']}, checked-in: {c['checked_in']}\n"
+                if resort_stats:
+                    resp += "\n**🛫 Resort ➔ Male (Departure Leg)**\n"
+                    for t in sorted(resort_stats):
+                        c = resort_stats[t]
+                        resp += f"{t}  —  booked: {c['booked']}, checked-in: {c['checked_in']}\n"
             else:
-                response += "No time slots found.\n"
+                resp += "No time slots found.\n"
 
-            response += "\n**🎫 Ticket Type + Total**\n"
+            # Ticket type
+            resp += "\n**🎫 Ticket Type + Total**\n"
             if ticket_stats:
                 total_tickets = sum(ticket_stats.values())
-                for ticket_type, count in ticket_stats.items():
-                    response += f"{count} - {ticket_type}\n"
-                response += f"Total {total_tickets}\n"
+                for tt, cnt in ticket_stats.items():
+                    resp += f"{cnt} - {tt}\n"
+                resp += f"Total {total_tickets}\n"
             else:
-                response += "No ticket types found.\n"
+                resp += "No ticket types found.\n"
 
-            response += f"\n**📋 Status Updates**\n"
-            response += f"Total check-in logs: {status_update_count}\n"
+            # Check-in logs
+            resp += "\n**📋 Status Updates**\n"
+            resp += f"Total check-in logs: {status_update_count}\n"
 
-            await update.message.reply_text(response, parse_mode='Markdown')
-
+            await update.message.reply_text(resp, parse_mode="Markdown")
             logger.info(f"[Stats] Statistics shown for event {event_name} by {update.effective_user.id}")
 
     except Exception as e:
