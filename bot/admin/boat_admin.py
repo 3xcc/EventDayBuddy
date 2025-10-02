@@ -71,7 +71,7 @@ async def _create_boarding_session(update, boat_number: int, seat_count: int, le
         # End any active sessions
         db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).update({
             "is_active": False,
-            "ended_at": datetime.now()
+            "ended_at": get_maldives_time()
         })
 
         # Start new session with leg_type
@@ -80,7 +80,7 @@ async def _create_boarding_session(update, boat_number: int, seat_count: int, le
             started_by=user_id,
             leg_type=leg_type,
             is_active=True,
-            started_at=datetime.now()
+            started_at=get_maldives_time()
         )
         db.add(session)
         db.commit()

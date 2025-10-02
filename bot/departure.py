@@ -5,6 +5,7 @@ from config.envs import ADMIN_CHAT_ID, DRY_RUN
 from db.init import get_db
 from db.models import Boat, BoardingSession, Booking, Config
 from datetime import datetime
+from utils.timezone import get_maldives_time, format_maldives_time
 from utils.pdf_generator import generate_manifest_pdf
 from utils.idcards import generate_idcards_pdf
 from utils.supabase_storage import upload_manifest, upload_idcard
@@ -31,11 +32,9 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Boat number must be a positive integer.")
             return
 
-        # Use local time for GMT+5 (Maldives time)
-        departure_time = datetime.now()  # Changed from utcnow() to now()
-        
-        # Format for display in Maldives time
-        departure_display = departure_time.strftime('%Y-%m-%d %H:%M') + " (GMT+5)"
+        # Use Maldives time
+        departure_time = get_maldives_time()
+        departure_display = format_maldives_time(departure_time)
 
         with get_db() as db:
             try:
@@ -66,8 +65,8 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # End boarding session
             session = (
-                db.query(BoardingSession)
-                .filter(BoardingSession.boat_number == boat_number,
+                db.query(boardingSession)
+                .filter(boardingSession.boat_number == boat_number,
                         BoardingSession.is_active.is_(True))
                 .with_for_update(nowait=True)
                 .first()
@@ -119,7 +118,7 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(buttons)
 
         await update.message.reply_text(
-            f"🛥️ Boat {boat_number} departed at {departure_display}.\n\n"  # Use local time display
+            f"🛥️ Boat {boat_number} departed at {departure_display}.\n\n"
             f"{manifest_text}",
             reply_markup=reply_markup
         )

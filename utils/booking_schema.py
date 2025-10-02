@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from utils.timezone import get_maldives_time
 
 # Master tab headers (full schema, includes Event + audit fields)
 MASTER_HEADERS = [
@@ -65,7 +66,7 @@ def build_master_row(booking: dict, event_name: str) -> list:
     Build a row aligned with MASTER_HEADERS from a booking dict.
     Preserves CreatedAt if provided, always refreshes UpdatedAt.
     """
-    now = datetime.now().isoformat()
+    now = get_maldives_time().isoformat()
     created_at = booking.get("created_at") or now
     updated_at = now
 

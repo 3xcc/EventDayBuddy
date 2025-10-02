@@ -5,12 +5,17 @@ from config.logger import logger, log_and_raise
 from config.envs import DRY_RUN, LOG_LEVEL
 from db.init import init_db
 from web.server import app, PORT
+from utils.timezone import set_maldives_timezone
 
 def main():
     """Main entrypoint for EventDayBuddy — starts DB and web server."""
     try:
         print("[DEBUG] main() starting...")
         logger.info("🚀 EventDayBuddy starting up...")
+
+        # Set Maldives timezone (GMT+5) for the application
+        set_maldives_timezone()
+        logger.info("🕐 Set application timezone to Maldives time (GMT+5)")
 
         print("[DEBUG] Initializing database...")
         # Initialize database safely

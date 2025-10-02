@@ -319,7 +319,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
 
             # Check in all passengers that need it
-            now = datetime.now()
+            now = get_maldives_time()
             checked_in_count = 0
 
             for booking in group_needs_checkin:
@@ -360,7 +360,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     db.refresh(booking)
                     
                     # Update both Master and Event tabs
-                    master_row = build_master_row(booking)
+                    master_row = build_master_row(booking, booking.event_id)
                     event_row = build_event_row(master_row)
                     update_booking(booking.event_id, master_row, event_row)
                     logger.info(f"[Sheets] Updated sheet for booking {booking.id}")
@@ -500,7 +500,7 @@ async def confirm_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             # === UPDATE ONLY THE SELECTED LEG ===
-            now = datetime.now()
+            now = get_maldives_time()
             
             if leg == "arrival":
                 # Only update arrival boat
