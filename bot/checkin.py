@@ -357,20 +357,20 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
             # ✅ COMMIT ALL DATABASE CHANGES FIRST (after all updates)
             db.commit()
 
-            # ✅ UPDATE SHEETS OUTSIDE TRANSACTION (handle errors gracefully)
-            for booking in group_needs_checkin:
-                try:
-                    from sheets.manager import update_booking
-                    from utils.booking_schema import build_master_row, build_event_row
+        # ✅ UPDATE SHEETS OUTSIDE TRANSACTION (handle errors gracefully) - FIXED!
+        for booking in group_needs_checkin:
+            try:
+                from sheets.manager import update_booking
+                from utils.booking_schema import build_master_row, build_event_row
 
-                    # Update both Master and Event tabs
-                    master_row = build_master_row(booking, booking.event_id)
-                    event_row = build_event_row(master_row)
-                    update_booking(booking.event_id, master_row, event_row)
-                    logger.info(f"[Sheets] Updated sheet for booking {booking.id}")
-                except Exception as e:
-                    logger.error(f"[Sheets] Failed to update sheet for booking {booking.id}: {e}")
-                    # ❌ DON'T ROLLBACK - just log the error and continue
+                # Update both Master and Event tabs
+                master_row = build_master_row(booking, booking.event_id)
+                event_row = build_event_row(master_row)
+                update_booking(booking.event_id, master_row, event_row)
+                logger.info(f"[Sheets] Updated sheet for booking {booking.id}")
+            except Exception as e:
+                logger.error(f"[Sheets] Failed to update sheet for booking {booking.id}: {e}")
+                # ❌ DON'T ROLLBACK - just log the error and continue
 
         # Success message (outside with block)
         leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
