@@ -308,30 +308,31 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
 
             print(f"[DEBUG] Current passengers: {current_passenger_count}/{boat.capacity}")
 
-            # ✅ FIX: Re-query bookings within session context to keep them attached
+            # ✅ Get IDs of bookings that need check-in for this leg
             if leg_type == "arrival":
-                group_needs_checkin_ids = [b.id for b in bookings if not b.arrival_boat_boarded]
-                group_needs_checkin = [db.query(Booking).filter(Booking.id == bid).first() for bid in group_needs_checkin_ids]
+                needs_checkin_ids = [b.id for b in bookings if not b.arrival_boat_boarded]
             else:  # departure
-                group_needs_checkin_ids = [b.id for b in bookings if not b.departure_boat_boarded]
-                group_needs_checkin = [db.query(Booking).filter(Booking.id == bid).first() for bid in group_needs_checkin_ids]
+                needs_checkin_ids = [b.id for b in bookings if not b.departure_boat_boarded]
             
-            print(f"[DEBUG] Group needs checkin: {len(group_needs_checkin)} passengers")
+            print(f"[DEBUG] Group needs checkin: {len(needs_checkin_ids)} passengers")
 
-            if current_passenger_count + len(group_needs_checkin) > boat.capacity:
+            if current_passenger_count + len(needs_checkin_ids) > boat.capacity:
                 await query.edit_message_text(
                     f"🚫 Boat {session.boat_number} doesn't have enough capacity for this group.\n"
                     f"Current: {current_passenger_count}/{boat.capacity}\n"
-                    f"Group needs: {len(group_needs_checkin)} seats\n"
+                    f"Group needs: {len(needs_checkin_ids)} seats\n"
                     f"Please ask admin to /editseats or check in passengers individually."
                 )
                 return
 
-            # Check in all passengers that need it
+            # ✅ Process each booking individually (like individual check-in)
             now = get_maldives_time()
             checked_in_count = 0
 
-            for booking in group_needs_checkin:
+            for booking_id in needs_checkin_ids:
+                # Get fresh booking object within session (like individual check-in)
+                booking = db.query(Booking).filter(Booking.id == booking_id).first()
+                
                 print(f"[DEBUG] Processing booking {booking.id} - {booking.name}")
                 print(f"[DEBUG] Before: arrival_boat={booking.arrival_boat_boarded}, departure_boat={booking.departure_boat_boarded}, status={booking.status}")
 
@@ -377,7 +378,8 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
             print(f"[DEBUG] Commit completed")
 
             # ✅ UPDATE SHEETS INSIDE WITH BLOCK (like individual check-in)
-            for booking in group_needs_checkin:
+            for booking_id in needs_checkin_ids:
+                booking = db.query(Booking).filter(Booking.id == booking_id).first()
                 try:
                     from sheets.manager import update_booking
                     from utils.booking_schema import build_master_row, build_event_row

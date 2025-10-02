@@ -16,8 +16,7 @@ from config.logger import logger, log_and_raise
 from config.envs import TELEGRAM_TOKEN, PUBLIC_URL
 from bot.admin import cpe, boatready, boatready_callback, checkinmode, editseats, register, unregister
 from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
-from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers, reset_booking
-from bot.departure import departed
+from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers, reset_booking, stats_command
 from bot.editbooking import editbooking
 from bot import bookings_bulk
 from utils.supabase_storage import fetch_signed_file
@@ -54,6 +53,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• /i — Check-in by ID\n"
                 "• /p — Check-in by phone\n"
                 "• /sleeptime — Gracefully shut down the bot\n"
+                "• /stats — Show event statistics\n"
                 "• /start — Show this help menu"
             )
         elif role in ["checkin_staff", "booking_staff"]:
@@ -182,6 +182,7 @@ async def init_bot():
         app.add_handler(CommandHandler("editbooking", editbooking))
         app.add_handler(CommandHandler("sleeptime", sleeptime))
         app.add_handler(CommandHandler("resetbooking", reset_booking))
+        app.add_handler(CommandHandler("stats", stats_command))
 
         bookings_bulk.register_handlers(app)
         register_checkin_handlers(app)
