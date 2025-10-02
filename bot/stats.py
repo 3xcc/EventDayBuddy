@@ -65,6 +65,14 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response += f"Event: {event_name}\n"
             response += f"Total Bookings: {len(bookings)}\n\n"
 
+            # Add summary section
+            total_booked = len(bookings)
+            total_checked_in = sum(1 for booking in bookings if booking.status == "checked_in")
+
+            response += "**📈 Summary**\n"
+            response += f"Total booked = {total_booked}\n"
+            response += f"Total Checkedin = {total_checked_in}\n\n"
+
             # Time & Attendance section
             response += "**⏰ Time & Attendance**\n"
             if time_stats:
