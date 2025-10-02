@@ -10,6 +10,7 @@ from utils.supabase_storage import fetch_signed_file
 from utils.booking_schema import build_master_row, build_event_row
 from sheets.manager import update_booking
 from bot.utils.roles import require_role
+from utils.timezone import get_maldives_time
 
 
 # ===== Lookup and prompt =====
