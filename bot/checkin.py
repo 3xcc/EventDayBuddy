@@ -308,11 +308,13 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
 
             print(f"[DEBUG] Current passengers: {current_passenger_count}/{boat.capacity}")
 
-            # Count how many in this group need check-in for this leg
+            # ✅ FIX: Re-query bookings within session context to keep them attached
             if leg_type == "arrival":
-                group_needs_checkin = [b for b in bookings if not b.arrival_boat_boarded]
+                group_needs_checkin_ids = [b.id for b in bookings if not b.arrival_boat_boarded]
+                group_needs_checkin = [db.query(Booking).filter(Booking.id == bid).first() for bid in group_needs_checkin_ids]
             else:  # departure
-                group_needs_checkin = [b for b in bookings if not b.departure_boat_boarded]
+                group_needs_checkin_ids = [b.id for b in bookings if not b.departure_boat_boarded]
+                group_needs_checkin = [db.query(Booking).filter(Booking.id == bid).first() for bid in group_needs_checkin_ids]
             
             print(f"[DEBUG] Group needs checkin: {len(group_needs_checkin)} passengers")
 
