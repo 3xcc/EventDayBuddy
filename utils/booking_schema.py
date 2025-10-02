@@ -1,6 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 from utils.timezone import get_maldives_time
+from db.models import Booking
+
 
 # Master tab headers (full schema, includes Event + audit fields)
 MASTER_HEADERS = [
@@ -60,39 +62,70 @@ def _format_amount(value) -> str:
     except Exception:
         return str(value)
 
-
-def build_master_row(booking: dict, event_name: str) -> list:
+def build_master_row(booking, event_name: str) -> list:
     """
-    Build a row aligned with MASTER_HEADERS from a booking dict.
+    Build a row aligned with MASTER_HEADERS from a booking dict or Booking object.
     Preserves CreatedAt if provided, always refreshes UpdatedAt.
     """
     now = get_maldives_time().isoformat()
-    created_at = booking.get("created_at") or now
-    updated_at = now
 
-    return [
-        "",  # No (auto in Sheets)
-        event_name,
-        booking.get("ticket_ref") or "",
-        booking.get("name") or "",
-        booking.get("id_number") or "",
-        booking.get("phone") or "",
-        booking.get("male_dep") or "",
-        booking.get("resort_dep") or "",
-        booking.get("arrival_time") or "",
-        booking.get("departure_time") or "",
-        _format_amount(booking.get("paid_amount")),
-        booking.get("transfer_ref") or "",
-        booking.get("ticket_type") or "",
-        "",  # ArrivalBoatBoarded
-        "",  # DepartureBoatBoarded
-        "",  # CheckinTime
-        booking.get("status") or "booked",
-        booking.get("id_doc_url") or "",
-        booking.get("group_id") or "",
-        created_at,
-        updated_at,
-    ]
+    # Handle both dict and Booking object
+    if isinstance(booking, dict):
+        # Handle dictionary case (existing behavior)
+        created_at = booking.get("created_at") or now
+        updated_at = now
+
+        return [
+            "",  # No (auto in Sheets)
+            event_name,
+            booking.get("ticket_ref") or "",
+            booking.get("name") or "",
+            booking.get("id_number") or "",
+            booking.get("phone") or "",
+            booking.get("male_dep") or "",
+            booking.get("resort_dep") or "",
+            booking.get("arrival_time") or "",
+            booking.get("departure_time") or "",
+            _format_amount(booking.get("paid_amount")),
+            booking.get("transfer_ref") or "",
+            booking.get("ticket_type") or "",
+            "",  # ArrivalBoatBoarded
+            "",  # DepartureBoatBoarded
+            "",  # CheckinTime
+            booking.get("status") or "booked",
+            booking.get("id_doc_url") or "",
+            booking.get("group_id") or "",
+            created_at,
+            updated_at,
+        ]
+    else:
+        # Extract values from Booking object
+        created_at = booking.created_at.isoformat() if booking.created_at else now
+        updated_at = now
+
+        return [
+            "",  # No (auto in Sheets)
+            event_name,
+            booking.ticket_ref or "",
+            booking.name or "",
+            booking.id_number or "",
+            booking.phone or "",
+            booking.male_dep or "",
+            booking.resort_dep or "",
+            booking.arrival_time.isoformat() if booking.arrival_time else "",
+            booking.departure_time.isoformat() if booking.departure_time else "",
+            _format_amount(booking.paid_amount),
+            booking.transfer_ref or "",
+            booking.ticket_type or "",
+            booking.arrival_boat_boarded or "",
+            booking.departure_boat_boarded or "",
+            booking.checkin_time.isoformat() if booking.checkin_time else "",
+            booking.status or "booked",
+            booking.id_doc_url or "",
+            booking.group_id or "",
+            created_at,
+            updated_at,
+        ]
 
 
 def build_event_row(master_row: list) -> list:
