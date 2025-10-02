@@ -8,21 +8,12 @@ from utils.booking_schema import build_master_row, build_event_row
 from bot.utils.roles import require_role
 
 
-# Map user-friendly field names to DB attributes
+# Map user-friendly field names to DB attributes (ONLY 3 fields allowed)
 FIELD_ALIASES = {
-    "phone": "phone",
+    "name": "name",
     "id": "id_number",
-    "idnumber": "id_number",
-    "male": "male_dep",
-    "malé": "male_dep",
-    "resort": "resort_dep",
-    "departuretime": "departure_time",
-    "arrivaltime": "arrival_time",
-    "paid": "paid_amount",
-    "amount": "paid_amount",
-    "transfer": "transfer_ref",
-    "ticket": "ticket_type",
-    "status": "status",
+    "idnumber": "id_number", 
+    "phone": "phone",
 }
 
 
@@ -64,18 +55,16 @@ async def editbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "You will see a list of bookings for that ID.\n"
                 "Then, use one of these formats to edit:\n\n"
                 "Option 1: Inline\n"
-                "/editbooking <ticket_ref> field=value ...\n\n"
+                "/editbooking <ticket_ref> name=NewName phone=+1234567890\n\n"
                 "Option 2: Multi-line (first line is ticket_ref)\n"
                 "1. <ticket_ref>\n"
-                "2. Name\n"
-                "3. ID Number\n"
-                "4. Phone\n"
-                "5. Male Departure\n"
-                "6. Resort Departure\n"
-                "7. Paid Amount\n"
-                "8. Transfer Ref\n"
-                "9. Ticket Type\n"
-                "(Arrival/Departure times optional)\n\n"
+                "2. name:New Name\n"
+                "3. id:NEWID123\n"
+                "4. phone:+1234567890\n\n"
+                "⚠️ Only these 3 fields can be edited:\n"
+                "• name (passenger name)\n"
+                "• id/idnumber (ID number)\n"
+                "• phone (phone number)\n\n"
                 "👉 Start by searching: /editbooking <ID_NUMBER>"
             )
             return
@@ -91,7 +80,7 @@ async def editbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg = [f"🔎 Bookings for ID {id_number}:"]
                 for b in matches:
                     msg.append(f"• {b.ticket_ref}: {b.name} | {b.phone} | {b.status}")
-                msg.append("\nTo edit, use: /editbooking <ticket_ref> field=value ... or multi-line edit.")
+                msg.append("\nTo edit, use: /editbooking <ticket_ref> name=NewName phone=+1234567890")
                 await update.message.reply_text("\n".join(msg))
             return
 
@@ -103,7 +92,7 @@ async def editbooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parsed = parse_booking_input("\n".join(lines[1:]))
                 updates = parsed
             else:
-                await update.message.reply_text("❌ Usage: /editbooking <ticket_ref> field=value ... or multi-line edit.")
+                await update.message.reply_text("❌ Usage: /editbooking <ticket_ref> name=NewName phone=+1234567890")
                 return
         else:
             ticket_ref = context.args[0]
