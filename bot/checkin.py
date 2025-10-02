@@ -356,10 +356,6 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     booking.status = "checked_in"
                     booking.checkin_time = now
 
-                # ✅ REFRESH EACH BOOKING IMMEDIATELY (before commit)
-                print(f"[DEBUG] Refreshing booking {booking.id}")
-                db.refresh(booking)
-
                 # Log check-in for the specific leg only
                 if 'legs_checked' in locals():
                     print(f"[DEBUG] Adding checkin log for booking {booking.id}")
