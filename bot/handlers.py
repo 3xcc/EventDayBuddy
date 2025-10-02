@@ -19,6 +19,7 @@ from bot.bookings import newbooking, attach_photo_callback, handle_booking_photo
 from bot.checkin import checkin_by_id, checkin_by_phone, register_checkin_handlers, reset_booking
 from bot.stats import stats_command
 from bot.editbooking import editbooking
+from bot.departure import departed
 from bot import bookings_bulk
 from utils.supabase_storage import fetch_signed_file
 from db.init import get_db
