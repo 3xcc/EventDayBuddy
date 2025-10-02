@@ -341,6 +341,9 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 booking.status = "checked_in"
                 booking.checkin_time = now
 
+            # ✅ REFRESH EACH BOOKING IMMEDIATELY (before commit)
+            db.refresh(booking)
+
             # Log check-in for the specific leg only
             if 'legs_checked' in locals():
                 checkin_log = CheckinLog(
@@ -351,9 +354,9 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 db.add(checkin_log)
                 checked_in_count += 1
-                 # End of the main booking update loop
-            # ✅ COMMIT ALL DATABASE CHANGES FIRST (before sheets updates)
-            db.commit()
+
+        # ✅ COMMIT ALL DATABASE CHANGES FIRST (after all updates)
+        db.commit()
 
             # ✅ REFRESH ALL BOOKINGS FROM DB
             for booking in group_needs_checkin:
