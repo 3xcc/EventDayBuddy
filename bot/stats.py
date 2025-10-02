@@ -94,10 +94,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 resp += "No ticket types found.\n"
 
-            # Check-in logs
-            resp += "\n**📋 Status Updates**\n"
-            resp += f"Total check-in logs: {status_update_count}\n"
-
             await update.message.reply_text(resp, parse_mode="Markdown")
             logger.info(f"[Stats] Statistics shown for event {event_name} by {update.effective_user.id}")
 

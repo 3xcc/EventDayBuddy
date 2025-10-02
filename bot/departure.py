@@ -76,6 +76,13 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 session.ended_at = departure_time
                 logger.info(f"[Departure] Boarding session for Boat {boat_number} ended.")
 
+            # === UPDATE ACTUAL LEG TIMES ===
+            for b in bookings:
+                if b.arrival_boat_boarded == boat_number and b.arrival_time is None:
+                    b.arrival_time = departure_time  # record actual arrival leg time
+                if b.departure_boat_boarded == boat_number and b.departure_time is None:
+                    b.departure_time = departure_time  # record actual departure leg time
+
             # Build manifest summary
             bookings = db.query(Booking).filter(
                 (Booking.arrival_boat_boarded == boat_number) |
