@@ -366,8 +366,8 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     logger.info(f"[Sheets] Updated sheet for booking {booking.id}")
                 except Exception as e:
                     logger.error(f"[Sheets] Failed to update sheet for booking {booking.id}: {e}")
-
-            db.commit()
+                    # Mark that sheets update failed - will trigger full rollback
+                    raise Exception(f"Sheets update failed for booking {booking.id}")  # ✅ FULL ROLLBACK
 
         leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
         await query.edit_message_text(
