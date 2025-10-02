@@ -5,7 +5,7 @@ from db.init import get_db
 from db.models import Boat, BoardingSession
 from datetime import datetime
 from bot.utils.roles import require_role
-
+from utils.timezone import get_maldives_time
 
 @require_role("admin")
 async def boatready(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -69,7 +69,7 @@ async def _create_boarding_session(update, boat_number: int, seat_count: int, le
             db.add(boat)
 
         # End any active sessions
-        db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).update({
+        db.query(boardingSession).filter(boardingSession.is_active.is_(True)).update({
             "is_active": False,
             "ended_at": get_maldives_time()
         })
@@ -126,7 +126,7 @@ async def checkinmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
 
         with get_db() as db:
-            session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
+            session = db.query(boardingSession).filter(boardingSession.is_active.is_(True)).first()
 
         if not session:
             await update.message.reply_text("⚠️ No active boat session found. Use /boatready first.")
