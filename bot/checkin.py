@@ -352,14 +352,20 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 db.add(checkin_log)
                 checked_in_count += 1
 
-                # Update sheet for this booking
+                 # End of the main booking update loop
+            # ✅ COMMIT ALL DATABASE CHANGES FIRST (before sheets updates)
+            db.commit()
+
+            # ✅ REFRESH ALL BOOKINGS FROM DB
+            for booking in group_needs_checkin:
+                db.refresh(booking)
+
+            # ✅ UPDATE SHEETS OUTSIDE TRANSACTION (handle errors gracefully)
+            for booking in group_needs_checkin:
                 try:
                     from sheets.manager import update_booking
                     from utils.booking_schema import build_master_row, build_event_row
-                    
-                    # Get the latest booking data from DB
-                    db.refresh(booking)
-                    
+
                     # Update both Master and Event tabs
                     master_row = build_master_row(booking, booking.event_id)
                     event_row = build_event_row(master_row)
@@ -367,8 +373,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     logger.info(f"[Sheets] Updated sheet for booking {booking.id}")
                 except Exception as e:
                     logger.error(f"[Sheets] Failed to update sheet for booking {booking.id}: {e}")
-                    # Mark that sheets update failed - will trigger full rollback
-                    raise Exception(f"Sheets update failed for booking {booking.id}")  # ✅ FULL ROLLBACK
+                    # ❌ DON'T ROLLBACK - just log the error and continue
 
         leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
         await query.message.reply_text(
