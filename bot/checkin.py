@@ -323,26 +323,26 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
             now = get_maldives_time()
             checked_in_count = 0
 
-            for booking in group_needs_checkin:
-                # Determine which legs to check in
-                needs_arrival = not booking.arrival_boat_boarded
-                needs_departure = not booking.departure_boat_boarded
-
-                if needs_arrival:
+        for booking in group_needs_checkin:
+            # ✅ UPDATE ONLY THE CURRENT ACTIVE LEG (like individual check-in)
+            if leg_type == "arrival":
+                # Only update arrival boat if not already checked in
+                if not booking.arrival_boat_boarded:
                     booking.arrival_boat_boarded = session.boat_number
-                if needs_departure:
+                    legs_checked = ["arrival"]
+            elif leg_type == "departure":
+                # Only update departure boat if not already checked in
+                if not booking.departure_boat_boarded:
                     booking.departure_boat_boarded = session.boat_number
+                    legs_checked = ["departure"]
 
+            # Update status to checked_in only if at least one leg is completed
+            if booking.arrival_boat_boarded or booking.departure_boat_boarded:
                 booking.status = "checked_in"
                 booking.checkin_time = now
 
-                # Log check-in
-                legs_checked = []
-                if needs_arrival:
-                    legs_checked.append("arrival")
-                if needs_departure:
-                    legs_checked.append("departure")
-                
+            # Log check-in for the specific leg only
+            if 'legs_checked' in locals():
                 checkin_log = CheckinLog(
                     booking_id=booking.id,
                     boat_number=session.boat_number,
@@ -351,7 +351,6 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 db.add(checkin_log)
                 checked_in_count += 1
-
                  # End of the main booking update loop
             # ✅ COMMIT ALL DATABASE CHANGES FIRST (before sheets updates)
             db.commit()
