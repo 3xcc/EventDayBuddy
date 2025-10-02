@@ -276,6 +276,8 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 Booking.phone.ilike(f"%{phone_number}%")
             ).all()
 
+            print(f"[DEBUG] Found {len(bookings)} bookings for phone {phone_number}")
+
             if not bookings:
                 await query.edit_message_text("❌ No bookings found for this group.")
                 return
@@ -292,6 +294,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
 
             leg_type = session.leg_type
+            print(f"[DEBUG] Active leg: {leg_type}, Boat: {session.boat_number}")
 
             # Count current passengers for this leg
             if leg_type == "arrival":
@@ -303,12 +306,16 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     Booking.departure_boat_boarded == session.boat_number
                 ).count()
 
+            print(f"[DEBUG] Current passengers: {current_passenger_count}/{boat.capacity}")
+
             # Count how many in this group need check-in for this leg
             if leg_type == "arrival":
                 group_needs_checkin = [b for b in bookings if not b.arrival_boat_boarded]
             else:  # departure
                 group_needs_checkin = [b for b in bookings if not b.departure_boat_boarded]
             
+            print(f"[DEBUG] Group needs checkin: {len(group_needs_checkin)} passengers")
+
             if current_passenger_count + len(group_needs_checkin) > boat.capacity:
                 await query.edit_message_text(
                     f"🚫 Boat {session.boat_number} doesn't have enough capacity for this group.\n"
@@ -323,28 +330,36 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
             checked_in_count = 0
 
             for booking in group_needs_checkin:
+                print(f"[DEBUG] Processing booking {booking.id} - {booking.name}")
+                print(f"[DEBUG] Before: arrival_boat={booking.arrival_boat_boarded}, departure_boat={booking.departure_boat_boarded}, status={booking.status}")
+
                 # ✅ UPDATE ONLY THE CURRENT ACTIVE LEG (like individual check-in)
                 if leg_type == "arrival":
                     # Only update arrival boat if not already checked in
                     if not booking.arrival_boat_boarded:
+                        print(f"[DEBUG] Setting arrival boat for booking {booking.id}")
                         booking.arrival_boat_boarded = session.boat_number
                         legs_checked = ["arrival"]
                 elif leg_type == "departure":
                     # Only update departure boat if not already checked in
                     if not booking.departure_boat_boarded:
+                        print(f"[DEBUG] Setting departure boat for booking {booking.id}")
                         booking.departure_boat_boarded = session.boat_number
                         legs_checked = ["departure"]
 
                 # Update status to checked_in only if at least one leg is completed
                 if booking.arrival_boat_boarded or booking.departure_boat_boarded:
+                    print(f"[DEBUG] Setting status to checked_in for booking {booking.id}")
                     booking.status = "checked_in"
                     booking.checkin_time = now
 
                 # ✅ REFRESH EACH BOOKING IMMEDIATELY (before commit)
+                print(f"[DEBUG] Refreshing booking {booking.id}")
                 db.refresh(booking)
 
                 # Log check-in for the specific leg only
                 if 'legs_checked' in locals():
+                    print(f"[DEBUG] Adding checkin log for booking {booking.id}")
                     checkin_log = CheckinLog(
                         booking_id=booking.id,
                         boat_number=session.boat_number,
@@ -354,8 +369,10 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     db.add(checkin_log)
                     checked_in_count += 1
 
+            print(f"[DEBUG] About to commit {checked_in_count} bookings")
             # ✅ COMMIT ALL DATABASE CHANGES FIRST (after all updates)
             db.commit()
+            print(f"[DEBUG] Commit completed")
 
             # ✅ UPDATE SHEETS INSIDE WITH BLOCK (like individual check-in)
             for booking in group_needs_checkin:
@@ -367,11 +384,13 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     master_row = build_master_row(booking, booking.event_id)
                     event_row = build_event_row(master_row)
                     update_booking(booking.event_id, master_row, event_row)
-                    logger.info(f"[Sheets] Updated sheet for booking {booking.id}")
+                    print(f"[DEBUG] Updated sheet for booking {booking.id}")
                 except Exception as e:
+                    print(f"[DEBUG] Failed to update sheet for booking {booking.id}: {e}")
                     logger.error(f"[Sheets] Failed to update sheet for booking {booking.id}: {e}")
                     # ❌ DON'T ROLLBACK - just log the error and continue
 
+        print(f"[DEBUG] Database session closed, sending success message")
         # Success message (outside with block)
         leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
         await query.message.reply_text(
@@ -385,6 +404,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.info(f"[Checkin] Group check-in for phone {phone_number}: {checked_in_count} passengers by {user_id}")
 
     except Exception as e:
+        print(f"[DEBUG] Exception occurred: {e}")
         log_and_raise("Checkin", "handling group check-in", e)
 
 async def handle_group_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
