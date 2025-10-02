@@ -36,6 +36,9 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         departure_time = get_maldives_time()
         departure_display = format_maldives_time(departure_time)
 
+        manifest_text = ""  # Initialize
+        event_name = "General"  # Default
+
         with get_db() as db:
             try:
                 # Lock the boat row for update
@@ -76,7 +79,13 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 session.ended_at = departure_time
                 logger.info(f"[Departure] Boarding session for Boat {boat_number} ended.")
 
-            # === UPDATE ACTUAL LEG TIMES ===
+            # === GET BOOKINGS FIRST ===
+            bookings = db.query(Booking).filter(
+                (Booking.arrival_boat_boarded == boat_number) |
+                (Booking.departure_boat_boarded == boat_number)
+            ).all()
+
+            # === THEN UPDATE ACTUAL LEG TIMES ===
             for b in bookings:
                 if b.arrival_boat_boarded == boat_number and b.arrival_time is None:
                     b.arrival_time = departure_time  # record actual arrival leg time
@@ -84,11 +93,6 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     b.departure_time = departure_time  # record actual departure leg time
 
             # Build manifest summary
-            bookings = db.query(Booking).filter(
-                (Booking.arrival_boat_boarded == boat_number) |
-                (Booking.departure_boat_boarded == boat_number)
-            ).all()
-
             manifest_lines = ["📋 Manifest:"]
             for b in bookings:
                 manifest_lines.append(
