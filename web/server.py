@@ -84,7 +84,6 @@ def health_check():
     }
 
 # ===== Telegram Webhook =====
-# ===== Telegram Webhook =====
 @app.post(f"/{TELEGRAM_TOKEN}")
 async def telegram_webhook(request: Request):
     try:
