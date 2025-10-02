@@ -266,109 +266,49 @@ async def handle_individual_selection(update: Update, context: ContextTypes.DEFA
 
 
 async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str, action: str):
-    """Check in entire group or handle group actions."""
     try:
         query = update.callback_query
         user_id = str(query.from_user.id)
 
         with get_db() as db:
-            # Get all bookings for this phone number that need check-in
-            bookings = db.query(Booking).filter(
-                Booking.phone.ilike(f"%{phone_number}%")
-            ).all()
-
-            if not bookings:
-                await query.edit_message_text("❌ No bookings found for this group.")
-                return
-
-            # Check capacity before proceeding
-            session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
-            if not session:
-                await query.edit_message_text("⚠️ No active boat session.")
-                return
-
-            boat = db.query(Boat).filter(Boat.boat_number == session.boat_number).first()
-            if not boat:
-                await query.edit_message_text("❌ Boat not found.")
-                return
-
-            leg_type = session.leg_type
-
-            # Count current passengers for this leg
-            if leg_type == "arrival":
-                current_passenger_count = db.query(Booking).filter(
-                    Booking.arrival_boat_boarded == session.boat_number
-                ).count()
-            else:  # departure
-                current_passenger_count = db.query(Booking).filter(
-                    Booking.departure_boat_boarded == session.boat_number
-                ).count()
-
-            # Count how many in this group need check-in for this leg
-            if leg_type == "arrival":
-                group_needs_checkin = [b for b in bookings if not b.arrival_boat_boarded]
-            else:  # departure
-                group_needs_checkin = [b for b in bookings if not b.departure_boat_boarded]
+            # ... existing code until line 325 ...
             
-            if current_passenger_count + len(group_needs_checkin) > boat.capacity:
-                await query.edit_message_text(
-                    f"🚫 Boat {session.boat_number} doesn't have enough capacity for this group.\n"
-                    f"Current: {current_passenger_count}/{boat.capacity}\n"
-                    f"Group needs: {len(group_needs_checkin)} seats\n"
-                    f"Please ask admin to /editseats or check in passengers individually."
-                )
-                return
+            for booking in group_needs_checkin:  # ← Should be here (function level)
+                # ✅ UPDATE ONLY THE CURRENT ACTIVE LEG
+                if leg_type == "arrival":
+                    if not booking.arrival_boat_boarded:
+                        booking.arrival_boat_boarded = session.boat_number
+                        legs_checked = ["arrival"]
+                elif leg_type == "departure":
+                    if not booking.departure_boat_boarded:
+                        booking.departure_boat_boarded = session.boat_number
+                        legs_checked = ["departure"]
 
-            # Check in all passengers that need it
-            now = get_maldives_time()
-            checked_in_count = 0
+                if booking.arrival_boat_boarded or booking.departure_boat_boarded:
+                    booking.status = "checked_in"
+                    booking.checkin_time = now
 
-        for booking in group_needs_checkin:
-            # ✅ UPDATE ONLY THE CURRENT ACTIVE LEG (like individual check-in)
-            if leg_type == "arrival":
-                # Only update arrival boat if not already checked in
-                if not booking.arrival_boat_boarded:
-                    booking.arrival_boat_boarded = session.boat_number
-                    legs_checked = ["arrival"]
-            elif leg_type == "departure":
-                # Only update departure boat if not already checked in
-                if not booking.departure_boat_boarded:
-                    booking.departure_boat_boarded = session.boat_number
-                    legs_checked = ["departure"]
-
-            # Update status to checked_in only if at least one leg is completed
-            if booking.arrival_boat_boarded or booking.departure_boat_boarded:
-                booking.status = "checked_in"
-                booking.checkin_time = now
-
-            # ✅ REFRESH EACH BOOKING IMMEDIATELY (before commit)
-            db.refresh(booking)
-
-            # Log check-in for the specific leg only
-            if 'legs_checked' in locals():
-                checkin_log = CheckinLog(
-                    booking_id=booking.id,
-                    boat_number=session.boat_number,
-                    confirmed_by=user_id,
-                    method=f"group-{'-'.join(legs_checked)}"
-                )
-                db.add(checkin_log)
-                checked_in_count += 1
-
-        # ✅ COMMIT ALL DATABASE CHANGES FIRST (after all updates)
-        db.commit()
-
-            # ✅ REFRESH ALL BOOKINGS FROM DB
-            for booking in group_needs_checkin:
                 db.refresh(booking)
 
-            # ✅ UPDATE SHEETS OUTSIDE TRANSACTION (handle errors gracefully)
-            for booking in group_needs_checkin:
+                if 'legs_checked' in locals():
+                    checkin_log = CheckinLog(
+                        booking_id=booking.id,
+                        boat_number=session.boat_number,
+                        confirmed_by=user_id,
+                        method=f"group-{'-'.join(legs_checked)}"
+                    )
+                    db.add(checkin_log)
+                    checked_in_count += 1
+
+            # ✅ COMMIT ALL DATABASE CHANGES FIRST
+            db.commit()
+
+            # ✅ UPDATE SHEETS OUTSIDE TRANSACTION
+            for booking in group_needs_checkin:  # ← Should be here (function level)
                 try:
                     from sheets.manager import update_booking
                     from utils.booking_schema import build_master_row, build_event_row
 
-                    # Update both Master and Event tabs
                     master_row = build_master_row(booking, booking.event_id)
                     event_row = build_event_row(master_row)
                     update_booking(booking.event_id, master_row, event_row)
@@ -377,6 +317,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     logger.error(f"[Sheets] Failed to update sheet for booking {booking.id}: {e}")
                     # ❌ DON'T ROLLBACK - just log the error and continue
 
+        # Success message (outside with block)
         leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
         await query.message.reply_text(
             f"✅ Group check-in completed!\n"
@@ -390,6 +331,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
 
     except Exception as e:
         log_and_raise("Checkin", "handling group check-in", e)
+
 
 async def handle_group_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
     """Skip entire group - no database changes, just UI feedback."""
