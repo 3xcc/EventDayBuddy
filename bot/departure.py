@@ -65,8 +65,8 @@ async def departed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # End boarding session
             session = (
-                db.query(boardingSession)
-                .filter(boardingSession.boat_number == boat_number,
+                db.query(BoardingSession)
+                .filter(BoardingSession.boat_number == boat_number,
                         BoardingSession.is_active.is_(True))
                 .with_for_update(nowait=True)
                 .first()
