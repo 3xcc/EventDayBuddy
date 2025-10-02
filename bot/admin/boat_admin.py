@@ -69,7 +69,7 @@ async def _create_boarding_session(update, boat_number: int, seat_count: int, le
             db.add(boat)
 
         # End any active sessions
-        db.query(boardingSession).filter(boardingSession.is_active.is_(True)).update({
+        db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).update({
             "is_active": False,
             "ended_at": get_maldives_time()
         })
