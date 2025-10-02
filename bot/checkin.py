@@ -371,7 +371,7 @@ async def handle_group_checkin(update: Update, context: ContextTypes.DEFAULT_TYP
                     raise Exception(f"Sheets update failed for booking {booking.id}")  # ✅ FULL ROLLBACK
 
         leg_emoji = "🛬" if leg_type == "arrival" else "🛫"
-        await query.edit_message_text(
+        await query.message.reply_text(
             f"✅ Group check-in completed!\n"
             f"📞 Phone: {phone_number}\n"
             f"👥 Checked in: {checked_in_count} passenger(s)\n"
