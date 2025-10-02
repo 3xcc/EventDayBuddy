@@ -126,7 +126,7 @@ async def checkinmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
 
         with get_db() as db:
-            session = db.query(boardingSession).filter(boardingSession.is_active.is_(True)).first()
+            session = db.query(BoardingSession).filter(BoardingSession.is_active.is_(True)).first()
 
         if not session:
             await update.message.reply_text("⚠️ No active boat session found. Use /boatready first.")
